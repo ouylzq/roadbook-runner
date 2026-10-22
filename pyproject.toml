@@ -1,0 +1,48 @@
+[project]
+name = "qa-agent"
+version = "0.1.0"
+description = "Roadbook 路书的独立运行时：一个 agent、一个独立裁判、一块看板。"
+requires-python = ">=3.12"
+dependencies = [
+  "playwright>=1.47",
+  "openai>=1.50",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pyyaml>=6.0",
+  "python-dotenv>=1.0",
+  "jsonschema>=4.23",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "types-PyYAML", "httpx2"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["runtime", "runtime.context", "runtime.events", "runtime.traces",
+            "tools", "tools.browser", "tools.recorder", "tools.validator"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]  # 中文标点 / 长注释行不当错
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

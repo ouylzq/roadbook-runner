@@ -1,0 +1,2500 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Roadbook Runner</title>
+<style>
+  :root{
+    --bg:#f2f5f4; --surface:#fff; --surface-2:#e7edea; --ink:#101b18; --muted:#5b6b65;
+    --line:#d5dedb; --accent:#0d7a70; --pass:#137a4b; --fail:#b3261e; --block:#a8601a;
+    --mono:'SF Mono',Menlo,Consolas,monospace;
+    /* 工具类别配色：改页面 / 看页面 / 资产·脚本 */
+    --act:#0d7a70; --look:#5b6b65; --asset:#5a4fc4;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+    --bg:#0d1412; --surface:#151e1b; --surface-2:#1c2724; --ink:#e6ece9; --muted:#92a19b;
+    --line:#293633; --accent:#3fc7ba; --pass:#4ec98a; --fail:#f2857c; --block:#e0a15c;
+    --act:#3fc7ba; --look:#8fa39c; --asset:#9d93ff;
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 system-ui,-apple-system,"PingFang SC",sans-serif}
+  /* 只管页面顶栏。别写成裸 header——弹窗里的卡片头也是 <header>，
+     会跟着变成 sticky+z-index:5，盖在页签上面（2026-09-22 实测：14 个卡片头全中招） */
+  body>header{display:flex;align-items:center;gap:12px;padding:12px 26px;
+         background:var(--surface);border-bottom:1px solid var(--line);
+         position:sticky;top:0;z-index:5}
+  body>header .brand{display:inline-flex;width:34px;height:34px;border-radius:9px;align-items:center;justify-content:center;
+         background:var(--accent);color:#fff;flex:none}
+  body>header .titles{display:grid;line-height:1.25}
+  body>header h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.2px}
+  body>header .sub{color:var(--muted);font-size:12px}
+  body>header .spacer{margin-left:auto}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  button.primary:hover{filter:brightness(1.07)}
+  button.link{background:none;border-color:transparent;color:var(--muted);padding:5px 8px;font-weight:500}
+  button.link:hover{color:var(--accent)}
+  button.sm{padding:4px 10px;font-size:12.5px}
+  /* 概览条：数字即筛选 */
+  .overview{max-width:1500px;margin:0 auto 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .ov-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .ov-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 9px;border-radius:999px;
+           border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:12.5px;font-weight:500}
+  .ov-chip b{font:700 12.5px var(--mono);color:var(--ink)}
+  .ov-chip::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .ov-chip.pass::before{background:var(--pass)} .ov-chip.fail::before{background:var(--fail)}
+  .ov-chip.block::before,.ov-chip.ask::before{background:var(--block)} .ov-chip.running::before{background:var(--accent)}
+  .ov-chip.all::before{display:none}
+  .ov-chip.on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+  .ov-chip:hover{border-color:var(--accent)}
+  /* 记忆页 */
+  body>header .cnt{display:inline-block;min-width:16px;padding:0 5px;margin-left:6px;border-radius:999px;
+                   background:var(--block);color:#fff;font:700 10.5px var(--mono);line-height:16px;vertical-align:1px}
+  #memdlg{max-width:min(860px,95vw);width:min(860px,95vw);max-height:92vh}
+  #memdlg[open]{display:flex;flex-direction:column}
+  #memdlg .dlg-body{flex:1;min-height:0;overflow:auto}
+  .mem-h{margin:18px 0 8px;font-size:13px;font-weight:600}
+  .mem-h .count{font:11px var(--mono);color:var(--muted);margin-left:6px}
+  .mem-c{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px;margin-bottom:10px}
+  .mem-c.ready{border-color:var(--ok);box-shadow:0 0 0 2px color-mix(in srgb,var(--ok) 18%,transparent)}
+  .mem-c.canonical{border-left:4px solid var(--warn)}
+  .mem-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .mem-head .sp{flex:1}
+  .mem-votes b{font-family:var(--mono);color:var(--ink)} .mem-votes b.ok{color:var(--ok)} .mem-votes b.bad{color:var(--bad)}
+  .mem-src{font-size:11.5px;color:var(--muted)}
+  .mem-text{margin:8px 0;font-size:13.5px;line-height:1.65}
+  .mem-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mem-act .hint{flex-basis:100%;margin-top:2px}
+  .mem-p{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px dashed var(--line);font-size:13px}
+  .mem-p:first-of-type{border-top:0}
+  .mem-p b.bad{color:var(--bad);font-family:var(--mono)}
+  .mem-ledger{font-size:12px;display:grid;gap:3px}
+  .mem-r{display:grid;grid-template-columns:82px 130px auto 1fr;gap:8px;align-items:baseline}
+  .mem-r .t{font-family:var(--mono);color:var(--muted);font-size:11px}
+  .mem-r .e{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .mem-r .e.promoted,.mem-r .e.created,.mem-r .e.canonical_promoted{color:var(--ok)}
+  .mem-r .e.dropped,.mem-r .e.demoted,.mem-r .e.refute_promoted{color:var(--bad)}
+  .mem-r .e.proposed,.mem-r .e.voted,.mem-r .e.merged_as_vote{color:var(--accent)}
+  .mem-r .hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 上手面板 */
+  .onboard{max-width:1500px;margin:18px auto -4px;padding:0 26px}
+  .onboard .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+  .onboard .steps>div{display:flex;gap:11px;padding:13px 15px;background:var(--surface);
+                      border:1px solid var(--line);border-radius:8px}
+  .onboard .steps>div>b{flex:none;display:inline-flex;align-items:center;justify-content:center;
+                        width:24px;height:24px;border-radius:999px;background:var(--accent);color:#fff;
+                        font:700 12px var(--mono)}
+  .onboard h4{margin:0 0 4px;font-size:13.5px}
+  .onboard p{margin:0;font-size:12.5px;line-height:1.7;color:var(--muted)}
+  .onboard .foot{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:12px;color:var(--muted)}
+  .onboard .foot span{flex:1}
+  /* 页签：人话为主，文件名做小字 */
+  .tabs button small{display:block;font:10.5px var(--mono);font-weight:400;opacity:.65;margin-top:1px}
+  /* 新建场景：例子按钮 + 好坏对照表 */
+  .examples{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .examples button{font-size:11.5px;padding:3px 9px}
+  /* 新建场景：一个主角（描述框），其余全是可折叠的次要信息 */
+  #author{max-width:min(720px,95vw);width:min(720px,95vw)}
+  .author .au-intro{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .au-main{margin-bottom:14px}
+  .au-label{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:7px;font-size:13px}
+  .au-label>span:first-child{color:var(--ink)}
+  .au-eg{margin-left:auto;font-size:12px;color:var(--muted);display:flex;gap:8px}
+  .au-eg a{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
+  .au-eg a:hover{border-bottom-style:solid}
+  #author-ask{width:100%;font:14px/1.7 inherit;padding:12px 14px;border:1.5px solid var(--line);border-radius:8px;
+              background:var(--surface);color:var(--ink);resize:vertical;min-height:132px;
+              box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  #author-ask:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+  .au-more{display:grid;gap:2px;margin-bottom:16px}
+  .au-more details{border-top:1px solid var(--line)}
+  .au-more details:last-child{border-bottom:1px solid var(--line)}
+  .au-more summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px;padding:9px 2px;
+                   font-size:12.5px;color:var(--muted)}
+  .au-more summary::-webkit-details-marker{display:none}
+  .au-more summary::before{content:'▸';font-size:10px;color:var(--muted)}
+  .au-more details[open]>summary::before{content:'▾'}
+  .au-more details[open]>summary{color:var(--ink)}
+  .au-more summary small{font-size:11.5px;color:var(--muted);opacity:.8}
+  .au-more details>*:not(summary){margin:2px 0 12px 14px}
+  .au-more input[type=text]{width:100%;font:13px var(--mono);padding:7px 10px;border:1px solid var(--line);
+                            border-radius:6px;background:var(--surface);color:var(--ink)}
+  .au-foot{display:flex;align-items:center;gap:14px}
+  .au-run{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer}
+  .goodbad{width:100%;border-collapse:collapse;font-size:12px}
+  .goodbad th{text-align:left;font-weight:600;padding:4px 8px;background:var(--bg);font-size:11.5px}
+  .goodbad th:first-child{color:var(--pass)} .goodbad th:last-child{color:var(--fail)}
+  .goodbad td{padding:4px 8px;border-top:1px dashed var(--line);vertical-align:top;line-height:1.55;color:var(--ink)}
+  .goodbad td span{display:block;color:var(--muted);font-size:11px}
+
+  .grid{display:grid;gap:18px;
+        grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+  .proj-head{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;
+             margin-top:8px;padding-bottom:6px;border-bottom:1px solid var(--line);
+             font:600 14px/1.4 var(--sans,system-ui);color:var(--ink)}
+  .proj-head:first-child{margin-top:0}
+  .proj-head .proj-n{font:400 11.5px var(--mono,monospace);color:var(--muted)}
+  .proj-head .proj-name{font-weight:600}
+  .proj-head .ghost{padding:2px 10px;font-size:11px}
+  .proj-head .sp{flex:1}
+  .proj-toggle{background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;line-height:1}
+  main{max-width:1500px;margin:0 auto;padding:18px 26px 40px}
+
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+        overflow:hidden;display:flex;flex-direction:column;
+        box-shadow:0 1px 2px rgba(0,0,0,.04);transition:box-shadow .15s,transform .15s}
+  .tile:hover{box-shadow:0 6px 18px rgba(0,0,0,.08);transform:translateY(-1px)}
+  .tile.running{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
+
+  .stage{position:relative;aspect-ratio:16/10;background:linear-gradient(160deg,#141c1a,#0b0f0e);display:flex;
+         align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid var(--line)}
+  .stage img,.stage video{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+  .stage .idle{color:#6b7c76;font-size:12.5px;text-align:center;padding:0 18px;display:grid;gap:4px;justify-items:center}
+  .stage .idle svg{color:#4a5a55;margin-bottom:4px} .stage .idle small{font-size:11px;color:#4f5f59}
+
+  .badge{position:absolute;top:10px;left:10px;display:flex;gap:6px;align-items:center}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:#e5484d;
+            animation:blink 1.1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .stagelabel{position:absolute;top:10px;right:10px;font:11px/1 var(--mono);
+              padding:4px 8px;border-radius:4px;background:rgba(0,0,0,.6);color:#e8efec}
+  .playbtn{position:absolute;inset:0;border:0;border-radius:0;padding:0;background:transparent;
+           display:flex;align-items:center;justify-content:center;cursor:pointer;
+           transition:background .15s}
+  .playbtn:hover{background:rgba(0,0,0,.28)}
+  .playbtn:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+  .playbtn .disc{width:64px;height:64px;border-radius:50%;
+                 background:rgba(12,18,16,.55);border:1.5px solid rgba(255,255,255,.75);
+                 display:flex;align-items:center;justify-content:center;
+                 transition:transform .15s,background .15s}
+  .playbtn:hover .disc{transform:scale(1.08);background:rgba(12,18,16,.78)}
+  .playbtn svg{margin-left:4px}
+
+  /* display 只能写在 [open] 上：写在基础规则里会盖掉 dialog:not([open]) 的默认
+     display:none，关闭后元素还在，塌成一条黑带（2026-09-16 实测） */
+  #player{max-width:min(1200px,94vw);width:min(1200px,94vw);max-height:92vh}
+  #player[open]{display:flex;flex-direction:column}
+  #player .dlg-body{padding:0;display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden}
+  #player video{width:100%;flex:1;min-height:0;background:#000;display:block;object-fit:contain}
+
+  .vbar{display:flex;align-items:center;gap:12px;padding:9px 13px;background:var(--surface-2);
+        border-top:1px solid var(--line)}
+  .vbar button{background:transparent;border:0;color:var(--ink);padding:2px 4px;font-size:15px;
+               line-height:1;min-width:26px}
+  .vbar .time{font:11.5px/1 var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;
+              white-space:nowrap}
+  .scrub{flex:1;position:relative;height:18px;display:flex;align-items:center;cursor:pointer}
+  .scrub .track{position:absolute;left:0;right:0;height:4px;border-radius:2px;background:var(--line)}
+  .scrub .fill{position:absolute;left:0;height:4px;border-radius:2px;background:var(--accent);width:0}
+  .scrub .knob{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--accent);
+               left:0;transform:translateX(-50%);box-shadow:0 0 0 2px var(--surface-2)}
+
+
+  .nowstep{position:absolute;left:0;right:0;bottom:0;padding:7px 11px;
+           background:linear-gradient(transparent,rgba(0,0,0,.82));
+           color:#dfe8e5;font:11px/1.4 var(--mono);white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis}
+
+  .meta{padding:13px 15px 10px;display:grid;gap:8px;flex:1}
+  .meta .head{display:flex;align-items:flex-start;gap:10px}
+  .meta .titles{min-width:0;flex:1}
+  .meta .title{font-size:14.5px;font-weight:650;line-height:1.35;color:var(--ink)}
+  .meta .slug{font:11px var(--mono);color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row{display:flex;align-items:center;gap:8px}
+  .desc{color:var(--muted);font-size:12.5px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;
+        -webkit-box-orient:vertical;overflow:hidden;min-height:40px}
+  .status{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+  .status .route{margin-left:auto}
+  .trend{display:inline-flex;gap:3px;align-items:center}
+  .trend i{width:7px;height:7px;border-radius:50%;background:var(--line);display:inline-block}
+  .trend i.pass{background:var(--pass)} .trend i.fail{background:var(--fail)}
+  .trend i.block,.trend i.ask{background:var(--block)} .trend i.running{background:var(--accent)}
+  .actions{display:flex;align-items:center;gap:6px;padding:9px 12px 11px;border-top:1px solid var(--line);
+           background:color-mix(in srgb,var(--surface-2) 45%,var(--surface));flex-wrap:wrap;row-gap:6px}
+  .actions .sp{flex:1}
+  .actions button{white-space:nowrap}
+  .tags{display:flex;gap:5px;flex-wrap:wrap}
+  .tag{font:10px/1.5 var(--mono);padding:1px 6px;border-radius:3px;
+       background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+  .pill{font:11px/1.5 var(--mono);font-weight:700;padding:2px 9px;border-radius:999px;flex:none;letter-spacing:.3px}
+  .pill.passed,.pill.PASS{background:color-mix(in srgb,var(--pass) 17%,transparent);color:var(--pass)}
+  .pill.failed,.pill.FAIL{background:color-mix(in srgb,var(--fail) 17%,transparent);color:var(--fail)}
+  .pill.blocked,.pill.BLOCK,.pill.error{background:color-mix(in srgb,var(--block) 17%,transparent);color:var(--block)}
+  .pill.running{background:var(--surface-2);color:var(--accent)}
+  .pill.needs_input,.pill.ASK{background:color-mix(in srgb,var(--block) 20%,transparent);
+                              color:var(--block)}
+  /* 人手动停的，不是失败——用中性灰，别跟 fail/block 撞色 */
+  .pill.stopped,.pill.STOPPED{background:var(--surface-2);color:var(--muted)}
+  .asks{display:grid;gap:9px;margin:10px 0 0}
+  .ask{display:grid;gap:5px}
+  .ask .q{font-size:13px;line-height:1.55}
+  .ask textarea{width:100%;font:12.5px/1.55 inherit;padding:7px 10px;border:1px solid var(--line);
+                border-radius:5px;background:var(--surface);color:var(--ink);resize:vertical}
+
+  button{font:inherit;cursor:pointer;border-radius:5px;border:1px solid var(--accent);
+         background:var(--accent);color:#fff;padding:6px 14px;font-weight:600;font-size:12.5px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--accent);padding:5px 10px;font-weight:500}
+  button.danger{background:transparent;border-color:var(--fail);color:var(--fail);padding:5px 10px;font-weight:500}
+
+  dialog{border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);
+         max-width:820px;width:92vw;padding:0;box-shadow:0 18px 48px rgba(0,0,0,.28)}
+  dialog::backdrop{background:rgba(0,0,0,.45)}
+  .dlg-head{display:flex;align-items:center;gap:10px;padding:14px 18px;
+            border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface)}
+  .dlg-body{padding:16px 18px;max-height:72vh;overflow:auto}
+  h4{margin:16px 0 7px;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  h4:first-child{margin-top:0}
+  pre{font:11.5px/1.5 var(--mono);background:var(--surface-2);padding:10px;border-radius:5px;
+      overflow:auto;max-height:260px;margin:0;white-space:pre-wrap}
+  .steps{display:grid;gap:3px}
+  .step{display:grid;grid-template-columns:30px 110px 1fr;gap:8px;font:11.5px/1.6 var(--mono);
+        padding:3px 7px;border-radius:3px;background:var(--surface-2)}
+  .step .t{color:var(--accent);font-weight:600}
+  .step .a{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .empty{color:var(--muted);font-size:12.5px;padding:10px 0}
+
+  .calls{display:grid;gap:3px;font:11.5px/1.6 var(--mono)}
+  .calls .hd{display:grid;grid-template-columns:28px 50px 1fr 70px 70px 70px;gap:8px;
+             color:var(--muted);padding:2px 7px}
+  .calls .row{display:grid;grid-template-columns:28px 50px 1fr 70px 70px 70px;gap:8px;
+              padding:3px 7px;border-radius:3px;background:var(--surface-2);align-items:center}
+  .calls .row.judge{background:var(--accent-graph-soft, var(--surface-2))}
+  .calls .tag{font-size:10px;padding:0 5px;border-radius:3px;background:var(--surface);
+              color:var(--muted);width:fit-content}
+  .calls .num{text-align:right;font-variant-numeric:tabular-nums}
+  .calls-total{font-size:11.5px;color:var(--muted);margin-top:6px}
+
+  /* 详情页签。body 的上内边距给到 0，否则粘顶时上面会漏出一条缝，内容从缝里爬到页签上面 */
+  #dlg .dlg-body{padding-top:0}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 -18px 14px;
+        padding:16px 18px 0;background:var(--surface);position:sticky;top:0;z-index:3}
+  .tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);
+               border-radius:0;padding:9px 12px;font-weight:600;font-size:12.5px}
+  .tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .tabs .count{font:11px var(--mono);opacity:.7;margin-left:4px}
+
+  /* 诊断条：跑批为什么是这个结论，一句话顶在最上面 */
+  .diag{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border-radius:6px;
+        font-size:12.5px;line-height:1.6;margin-bottom:12px;border:1px solid transparent}
+  .diag.bad{background:color-mix(in srgb,var(--fail) 10%,transparent);border-color:var(--fail);color:var(--fail)}
+  .diag.neutral{background:var(--surface-2);border-color:var(--line);color:var(--muted)}
+  .diag.warn{background:color-mix(in srgb,var(--block) 12%,transparent);border-color:var(--block);color:var(--block)}
+  .diag.ok{background:color-mix(in srgb,var(--pass) 10%,transparent);border-color:var(--pass);color:var(--pass)}
+  .diag b{flex:none}
+
+  /* 轨迹：一次模型调用 + 它产出的那几步 */
+  .tl{display:grid;gap:7px}
+  .tl-turn{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+  .tl-head{display:flex;align-items:center;gap:9px;padding:4px 10px;background:var(--surface-2);
+           font:11px var(--mono);color:var(--muted);border-bottom:1px solid var(--line)}
+  .tl-head b{color:var(--ink);font-size:11px}
+  .tl-head .sp{margin-left:auto}
+
+  /* 模型这一轮说的话，跟工具调用视觉上彻底分开 */
+  .tl-think{margin:7px 9px;padding:6px 10px;border-left:2px solid var(--line);
+            font-size:12.5px;line-height:1.6;color:var(--muted);white-space:pre-wrap}
+  .tl-think:empty{display:none}
+
+  .tl-step>summary{display:grid;grid-template-columns:3px 20px 52px 112px 1fr auto;gap:8px;
+                   align-items:center;padding:4px 10px 4px 0;cursor:pointer;
+                   font:11.5px/1.55 var(--mono);list-style:none}
+  .tl-step>summary::-webkit-details-marker{display:none}
+  .tl-step>summary:hover,.tl-step[open]>summary{background:var(--surface-2)}
+  .tl-step .bar{align-self:stretch;background:var(--line)}          /* 左侧类别色条 */
+  .tl-step .n{color:var(--muted);text-align:right;font-size:11px}
+  .tl-step .kind{font-size:10px;text-align:center;padding:1px 0;border-radius:3px;
+                 background:var(--surface-2);color:var(--muted);letter-spacing:.02em}
+  .tl-step .t{font-weight:600}
+  .tl-step .a{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tl-step .ms{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums;padding-right:10px}
+
+  .tl-step.k-act    .bar{background:var(--act)}
+  .tl-step.k-act    .t{color:var(--act)}
+  .tl-step.k-look   .bar{background:var(--look);opacity:.5}
+  .tl-step.k-look   .t{color:var(--look)}
+  .tl-step.k-asset  .bar{background:var(--asset)}
+  .tl-step.k-asset  .t{color:var(--asset)}
+  .tl-step.k-end    .bar{background:var(--pass)}
+  .tl-step.k-end    .t{color:var(--pass)}
+  .tl-step.k-skip   .bar{background:var(--block)}
+  .tl-step.k-skip   .t{color:var(--block);text-decoration:line-through;text-decoration-thickness:1px}
+  .tl-step.k-act   .kind{color:var(--act)}
+  .tl-step.k-asset .kind{color:var(--asset)}
+  .tl-step.k-skip  .kind{color:var(--block)}
+
+  .tl-body{padding:8px 11px 10px 21px;display:grid;gap:7px;border-top:1px dashed var(--line)}
+  .tl-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
+
+  .task pre{max-height:none;background:var(--surface-2);padding:12px 14px;font-size:12px;line-height:1.75}
+  /* 路书的五要素标记：渲染成正文之后仍然要一眼看出结构 */
+  .md .mark{color:var(--accent);font-weight:600}
+  .task .stale{border:1px solid var(--block);color:var(--block);border-radius:6px;
+               padding:8px 11px;font-size:12px;line-height:1.6;margin-bottom:12px;
+               background:color-mix(in srgb,var(--block) 10%,transparent)}
+
+  /* 图例：告诉人这些颜色代表什么 */
+  .tl-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--muted);margin-bottom:9px}
+  .tl-legend span{display:flex;align-items:center;gap:5px}
+  .tl-legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+  #author{max-width:min(680px,94vw);width:min(680px,94vw)}
+  #author[open]{display:block}
+  #author textarea{width:100%;min-height:130px;resize:vertical;font:13px/1.6 inherit;
+                   padding:11px 12px;border:1px solid var(--line);border-radius:6px;
+                   background:var(--surface);color:var(--ink)}
+  #author input[type=text]{width:100%;font:12.5px var(--mono);padding:8px 11px;
+                   border:1px solid var(--line);border-radius:6px;
+                   background:var(--surface);color:var(--ink)}
+  .field{display:grid;gap:5px;margin-bottom:13px}
+  .field label{font-size:12px;color:var(--muted)}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .hint code{background:var(--surface-2);padding:1px 5px;border-radius:3px;font-size:11px}
+  .authlog{margin-top:12px;display:grid;gap:3px;max-height:220px;overflow:auto}
+
+  /* 归属批注：这份文件谁维护。人写的和模型回写的性质完全不同——
+     改错地方要么被下次勘路覆盖，要么把标准改松了自己却不知道 */
+  .owner{display:flex;gap:9px;align-items:flex-start;padding:9px 12px;border-radius:7px;
+         font-size:12.5px;line-height:1.7;margin-bottom:12px;border:1px solid}
+  .owner b{flex:none}
+  .owner em{margin-left:auto;font-style:normal;font-size:11.5px;opacity:.75;white-space:nowrap}
+  .owner.human{background:color-mix(in srgb,var(--accent) 7%,transparent);
+               border-color:color-mix(in srgb,var(--accent) 35%,transparent);color:var(--ink)}
+  .owner.human b{color:var(--accent)}
+  .owner.bot{background:color-mix(in srgb,var(--block) 9%,transparent);
+             border-color:color-mix(in srgb,var(--block) 38%,transparent);color:var(--ink)}
+  .owner.bot b{color:var(--block)}
+
+  /* 裁判答卷：先扫步骤结论，再逐条对照「要求 / 证据 / 原因」。 */
+  .jg{display:grid;gap:18px}
+  .jg-overview{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:10px;
+               background:var(--surface)}
+  .jg-overview-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .jg-overview-title{font-size:14px;font-weight:700;margin-right:auto}
+  .jg-totals{display:flex;gap:7px;flex-wrap:wrap}
+  .jg-total{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:6px;
+            background:var(--surface-2);font-size:11.5px;color:var(--muted)}
+  .jg-total b{font:700 12px var(--mono);color:var(--ink)}
+  .jg-total.pass b{color:var(--pass)} .jg-total.fail b{color:var(--fail)}
+  .jg-total.blocked b{color:var(--block)}
+  .jg-nav{display:flex;gap:7px;flex-wrap:wrap}
+  .jg-nav a{--jg-status:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:5px 9px;
+            border:1px solid color-mix(in srgb,var(--jg-status) 36%,var(--line));border-radius:999px;
+            background:color-mix(in srgb,var(--jg-status) 7%,var(--surface));color:var(--ink);
+            font-size:11.5px;text-decoration:none}
+  .jg-nav a::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--jg-status)}
+  .jg-nav a.pass{--jg-status:var(--pass)} .jg-nav a.fail{--jg-status:var(--fail)}
+  .jg-nav a.blocked{--jg-status:var(--block)}
+
+  .jg-step{--jg-status:var(--muted);border:1px solid color-mix(in srgb,var(--jg-status) 34%,var(--line));
+           border-left:6px solid var(--jg-status);border-radius:10px;overflow:hidden;background:var(--surface);
+           box-shadow:0 2px 8px rgba(0,0,0,.07);scroll-margin-top:70px}
+  .jg-step.pass{--jg-status:var(--pass)} .jg-step.fail{--jg-status:var(--fail)}
+  .jg-step.blocked{--jg-status:var(--block)}
+  .jg-step>header{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:11px;align-items:center;
+                  padding:13px 14px;background:color-mix(in srgb,var(--jg-status) 8%,var(--surface));
+                  border-bottom:1px solid color-mix(in srgb,var(--jg-status) 22%,var(--line))}
+  .jg-no{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex:none;
+         border-radius:9px;background:var(--jg-status);color:#fff;font:700 15px var(--mono)}
+  .jg-step-title{min-width:0;font-size:14px;font-weight:650;line-height:1.55}
+  .jg-step-title small{display:block;margin-bottom:2px;font:10.5px var(--mono);font-weight:600;
+                       letter-spacing:.05em;text-transform:uppercase;color:var(--jg-status)}
+  .jg-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:6px;
+             background:var(--jg-status);color:#fff;font-size:11.5px;font-weight:750;white-space:nowrap}
+  .jg-status .icon{font-size:13px;line-height:1}
+  .jg-body{padding:13px 14px 15px;display:grid;gap:12px}
+  .jg-route{display:grid;grid-template-columns:86px minmax(0,1fr);gap:7px 12px;align-items:start;
+            padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);
+            font-size:12.5px;line-height:1.65}
+  .jg-route .k{font-size:11.5px;font-weight:650;color:var(--muted)}
+  .jg-route .reached{font-weight:700;color:var(--pass)}
+  .jg-route .reached.no{color:var(--fail)}
+  .jg-checks{display:grid;gap:10px}
+  .jg-check{--jg-status:var(--muted);border:1px solid color-mix(in srgb,var(--jg-status) 30%,var(--line));
+            border-left:5px solid var(--jg-status);border-radius:8px;overflow:hidden;background:var(--surface)}
+  .jg-check.pass{--jg-status:var(--pass)} .jg-check.fail{--jg-status:var(--fail)}
+  .jg-check.blocked{--jg-status:var(--block)}
+  .jg-check-head{display:flex;align-items:center;gap:9px;padding:8px 11px;
+                 background:color-mix(in srgb,var(--jg-status) 7%,var(--surface));
+                 border-bottom:1px solid color-mix(in srgb,var(--jg-status) 18%,var(--line))}
+  .jg-check-head b{font:700 11.5px var(--mono);color:var(--jg-status)}
+  .jg-check-head .sp{margin-left:auto}
+  .jg-check-head .jg-status{padding:3px 8px;font-size:10.5px}
+  .jg-row{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;padding:10px 12px;
+          font-size:12.5px;line-height:1.7;align-items:start}
+  .jg-row+.jg-row{border-top:1px dashed var(--line)}
+  .jg-row .k{font-size:11.5px;font-weight:650;color:var(--muted);padding-top:1px}
+  .jg-row.expected{background:var(--surface)}
+  .jg-row.actual{background:color-mix(in srgb,var(--jg-status) 4%,var(--surface-2))}
+  .jg-value{white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+  .jg-reason{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;padding:9px 12px;
+             border-top:1px solid color-mix(in srgb,var(--jg-status) 22%,var(--line));
+             background:color-mix(in srgb,var(--jg-status) 10%,var(--surface));
+             color:var(--jg-status);font-size:12.5px;line-height:1.65}
+  .jg-reason .k{font-size:11.5px;font-weight:750}
+  @media(max-width:640px){
+    .jg-step>header{grid-template-columns:34px minmax(0,1fr)}
+    .jg-no{width:34px;height:34px}.jg-step>header>.jg-status{grid-column:2;width:fit-content}
+    .jg-route,.jg-row,.jg-reason{grid-template-columns:1fr;gap:3px}
+  }
+  .res{font-weight:700;padding:1px 7px;border-radius:3px;font-size:11.5px;white-space:nowrap}
+  .res.pass{background:color-mix(in srgb,var(--pass) 18%,transparent);color:var(--pass)}
+  .res.fail{background:color-mix(in srgb,var(--fail) 18%,transparent);color:var(--fail)}
+  .res.blocked{background:color-mix(in srgb,var(--block) 18%,transparent);color:var(--block)}
+
+  /* 单节编辑：默认只读，点铅笔才把那一节变成表单 */
+  .ed-icon{background:transparent;border:1px solid var(--line);color:var(--muted);
+           border-radius:5px;padding:2px 9px;font-size:11.5px;line-height:1.7;font-weight:500;white-space:nowrap}
+  .ed-icon:hover{border-color:var(--accent);color:var(--accent)}
+  .jg-step>header .sp,.ex-step>header .sp,.doc-bar .sp{margin-left:auto}
+
+  /* 文档组件：intent / expect 的读模式与就地编辑。给非技术岗看的，所以读模式像文章不像源码 */
+  .doc{display:grid;gap:16px;background:var(--bg);padding:14px;border-radius:10px}
+  .doc-bar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);line-height:1.6}
+  .doc-bar .sp{margin-left:auto}
+  .chip{font-size:11px;padding:2px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+  .chip.env{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-weight:600}
+  .chip.mono{font-family:var(--mono)}
+  .envsel{font:12px system-ui,-apple-system,"PingFang SC",sans-serif;padding:4px 6px;border-radius:6px;
+          border:1px solid var(--line);background:var(--surface);color:var(--accent);font-weight:600;height:28px}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:3px;background:var(--surface);color:var(--muted);
+       border:1px solid var(--line);line-height:1.5}
+  .tag.req{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+  .doc-foot{display:flex;align-items:center;gap:10px;padding-top:2px}
+  .doc .ed-in{font-size:13px;line-height:1.65}
+  .doc-field{display:grid;grid-template-columns:86px 1fr;gap:10px;align-items:start;margin-bottom:9px}
+  .doc-field label{font:12px var(--mono);color:var(--accent);padding-top:8px}
+  .doc-field .hint{margin-top:4px}
+  .doc-field .hint.ok{color:var(--pass)} .doc-field .hint.bad{color:var(--block)}
+
+  /* 轻量 markdown 渲染 */
+  .md p{margin:0 0 8px} .md>*:last-child{margin-bottom:0}
+  .md ul,.md ol{margin:0 0 8px;padding-left:20px} .md li{margin:2px 0}
+  .md code{font:11.5px var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:3px}
+  .md pre.md-code{margin:6px 0 8px;max-height:none;font-size:11.5px;line-height:1.6}
+  .md pre.md-code code{background:none;padding:0}
+  .md blockquote{margin:6px 0 8px;padding:6px 11px;border-left:2px solid var(--accent);color:var(--muted);
+                 background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:0 4px 4px 0}
+  .md table{border-collapse:collapse;width:100%;font-size:12px;margin:6px 0 8px;display:block;overflow-x:auto}
+  .md th,.md td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  .md th{background:var(--surface-2);font-weight:600;white-space:nowrap}
+  .md .md-h{font-weight:700;margin:8px 0 4px}
+  .md .md-h1{font-size:15.5px;margin:2px 0 8px}
+  .md .md-h2{font-size:13.5px;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+  .md .md-h3{font-size:12.5px;margin:12px 0 4px;color:var(--muted)}
+  .md .md-h4,.md .md-h5,.md .md-h6{font-size:12px;color:var(--muted)}
+  .md>.md-h1:first-child,.md>.md-h2:first-child{margin-top:0}
+  .md a{color:var(--accent)}
+
+  /* 验收路线读模式：字段名照 yaml 保留，旁边给人话标签 */
+  .ex-goal{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--surface);
+           box-shadow:0 1px 3px rgba(0,0,0,.07)}
+  .ex-step{border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden;
+           box-shadow:0 1px 3px rgba(0,0,0,.07)}
+  .ex-step>header{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 10px;background:var(--surface-2);
+                  border-bottom:1px solid var(--line);border-left:3px solid var(--accent);font-size:12px;color:var(--muted)}
+  .ex-no{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;
+         border-radius:999px;background:var(--accent);color:#fff;font:700 11px var(--mono)}
+  .ex-row{display:grid;grid-template-columns:72px 1fr;gap:10px;padding:9px 12px;align-items:start;font-size:13px;line-height:1.7}
+  .ex-row+.ex-row{border-top:1px dashed var(--line)}
+  .ex-k{font:12px var(--mono);color:var(--accent)}
+  .ex-k small{display:block;font:10.5px system-ui,-apple-system,"PingFang SC",sans-serif;color:var(--muted);margin-top:1px}
+  .ex-checks{margin:0;padding-left:18px} .ex-checks li{margin:3px 0}
+  .ex-edit-step{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface)}
+  /* 主栏（目标）：这页唯一真要人写的地方，跟其它栏拉开 */
+  .ex-step.primary{border:1.5px solid var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent),0 1px 3px rgba(0,0,0,.07)}
+  .ex-step.primary>header{background:color-mix(in srgb,var(--accent) 10%,var(--surface));border-left-width:5px}
+  .ex-step.primary>header .ex-k{font-size:14.5px !important;font-weight:700}
+  .ex-step.primary>header .ex-lead{font-size:11.5px;color:var(--muted)}
+  .ex-step.primary>.ex-body{font-size:14.5px;line-height:1.8;padding:14px 16px}
+  .ex-step.primary>header .ed-icon{border-color:var(--accent);color:var(--accent);font-weight:600}
+  /* 三个 tab 共用上面这套卡片。路书的字段名（【到位标志】）比 yaml 键宽，列宽单独给；
+     intent 的小节正文是自由 markdown，不走两栏行，用 ex-body 铺满 */
+  .ex-row.pb{grid-template-columns:96px 1fr}
+  .ex-step>header b{color:var(--ink);font-size:13px;font-weight:600}
+  .ex-body{padding:11px 14px;font-size:13px;line-height:1.75}
+  #pb-steps{display:grid;gap:16px} #pb-steps:empty{display:none}
+  /* 从流程条跳过来时别被吸顶的页签压住 */
+  #pb-steps>*{scroll-margin-top:66px}
+  /* context.xxx：验收路线里唯一一类「现在还不知道、跑完才有」的值。以前只显示个变量名，
+     人不知道它代表什么——这里就地把上次的真实取值贴在后面，并在顶部给一张总表。 */
+  .cvar{position:relative;font-family:var(--mono);font-size:12px;color:var(--asset);
+        background:color-mix(in srgb,var(--asset) 10%,transparent);border-radius:4px;padding:1px 4px;
+        white-space:nowrap;border-bottom:1px dotted var(--asset);cursor:help}
+  .cvar u{text-decoration:none;font-size:11px;margin-left:2px}
+  /* 自绘 tooltip：原生 title 要停一秒才出、字又小，看板上要频繁扫这个值 */
+  .cvar::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 5px);z-index:5;
+        padding:5px 9px;border-radius:6px;background:var(--ink);color:var(--bg);font-size:11.5px;
+        white-space:nowrap;max-width:70vw;overflow:hidden;text-overflow:ellipsis;
+        box-shadow:0 3px 10px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .12s}
+  .cvar:hover::after{opacity:1}
+  .cvar.unknown{color:var(--block);background:color-mix(in srgb,var(--block) 12%,transparent)}
+  /* 引用了 intent.md 没声明的变量：这是 runner 不一定交、裁判取不到就判 BLOCK 的东西，
+     不能只藏在顶上那张收起来的总表里——就地标出来才有人会去补。 */
+  .cvar.undecl{color:var(--block);background:color-mix(in srgb,var(--block) 12%,transparent);
+        border-bottom-style:solid;border-bottom-color:var(--block)}
+  /* 编辑态：把「有哪些变量可以引」摆出来，人不用靠记忆敲名字 */
+  .cvpick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0 2px;
+        padding:7px 9px;border:1px dashed var(--line);border-radius:6px;background:var(--surface-2)}
+  .cvpick>span{font-size:11.5px;color:var(--muted)}
+  .cvpick em{font-size:11px;color:var(--muted);font-style:normal;flex-basis:100%}
+  .cvchip{font:11.5px/1.6 var(--mono);padding:1px 7px;border-radius:4px;cursor:pointer;
+        background:color-mix(in srgb,var(--asset) 12%,transparent);color:var(--asset);
+        border:1px solid color-mix(in srgb,var(--asset) 35%,transparent)}
+  .cvchip:hover{background:color-mix(in srgb,var(--asset) 22%,transparent)}
+  .cvchip.undecl{background:transparent;color:var(--block);border-style:dashed;
+        border-color:color-mix(in srgb,var(--block) 45%,transparent)}
+  .cvar.cfg{color:var(--accent);background:var(--surface-2);border-bottom-color:var(--accent)}
+  .cvar.cfg::after{white-space:pre-wrap;max-width:min(560px,80vw)}
+  /* 技术细节折叠组 + 环境表 */
+  .techgroup{border:1px dashed var(--line);border-radius:8px;background:transparent}
+  .techgroup>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+                     padding:10px 14px;font-size:12.5px;color:var(--muted)}
+  .techgroup>summary::-webkit-details-marker{display:none}
+  .techgroup>summary::before{content:'▸';font-size:10px}
+  .techgroup[open]>summary::before{content:'▾'}
+  .techgroup>summary b{color:var(--ink)}
+  .techgroup>summary em{font-style:normal;margin-left:auto;font-size:11.5px}
+  .techgroup .techbody{display:grid;gap:14px;padding:0 14px 14px}
+  .techgroup[open]>summary{border-bottom:1px dashed var(--line);margin-bottom:12px}
+  .cfgtab table{width:100%;border-collapse:collapse;font-size:12px}
+  .cfgtab th{text-align:left;padding:4px 8px;background:var(--surface-2);font-weight:600;font-size:11.5px}
+  .cfgtab th small{font-weight:400;color:var(--muted);margin-left:4px}
+  .cfgtab td{padding:4px 8px;border-top:1px dashed var(--line);vertical-align:top;word-break:break-all}
+  .cfgtab td.k{font-family:var(--mono);color:var(--accent);white-space:nowrap;width:1%}
+  .cfgtab td.k[title]:not([title=""]){border-bottom:1px dotted var(--accent);cursor:help}
+  .cfgtab code{font-size:11.5px}
+  .cfgtab .hint{margin-top:7px}
+  /* 流程条：一步一个胶囊，序号圆点 + 目的 */
+  .flow{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center}
+  .flow li{display:flex;align-items:center}
+  .flow li+li::before{content:'→';color:var(--muted);font-size:12px;margin:0 6px 0 2px}
+  /* 只读的展示条：不是按钮，别长得像能点 */
+  .flowstep{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border-radius:999px;
+            border:1px solid var(--line);background:var(--surface-2);color:var(--muted);font-size:12.5px;line-height:1.5;
+            cursor:default}
+  .flowstep b{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;
+              background:var(--line);color:var(--ink);font:700 10px var(--mono);flex:none}
+  .sec-empty{color:var(--muted);font-size:12.5px;display:grid;gap:8px}
+  .sec-empty .eg{display:flex;gap:9px;padding:8px 11px;border:1px dashed var(--line);border-radius:6px;background:var(--bg)}
+  .sec-empty .eg>span{flex:none;font:11px var(--mono);color:var(--accent);padding-top:2px}
+  .sec-empty .eg .md{flex:1} .sec-empty p{margin:0 0 4px}
+  .cvars{border:1px solid var(--line);border-radius:8px;background:var(--surface);
+         padding:7px 12px;margin:0 0 12px}
+  .cvars>summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;
+                 display:flex;align-items:center;gap:8px}
+  .cvars>summary::-webkit-details-marker{display:none}
+  .cvars>summary::before{content:'▸';color:var(--muted);font-size:10px}
+  .cvars[open]>summary::before{content:'▾'}
+  .cvars>summary b{color:var(--ink);font-size:12.5px}
+  .cvars>summary em{font-style:normal}
+  .cvars>summary em.bad{color:var(--block);font-weight:600}
+  .cvars[open]>summary{margin-bottom:7px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .cvars>p{margin:0 0 9px;font-size:11.5px;color:var(--muted);line-height:1.65}
+  .cvars table{width:100%;border-collapse:collapse;font-size:12px}
+  .cvars td{padding:4px 8px 4px 0;border-top:1px dashed var(--line);vertical-align:top}
+  .cvars tr:first-child td{border-top:0}
+  .cvars td.k{font-family:var(--mono);color:var(--asset);white-space:nowrap;width:1%}
+  .cvars td.v{font-family:var(--mono);color:var(--ink);word-break:break-all}
+  .cvars td.v.none{color:var(--block);font-family:inherit}
+  .cvars td.w{color:var(--muted);white-space:nowrap;width:1%;text-align:right;font-size:11px}
+
+  /* 路书编辑器：跟验收路线编辑器共用 .ed-* 那套控件 */
+  #pbed{max-width:min(900px,95vw);width:min(900px,95vw);max-height:92vh}
+  #pbed[open]{display:flex;flex-direction:column}
+  #pbed .dlg-body{flex:1;min-height:0;overflow:auto;padding-top:0}
+  .pb-f{display:grid;grid-template-columns:78px 1fr;gap:8px;align-items:start;margin-bottom:5px}
+  .pb-f label{font:12px var(--mono);color:var(--accent);padding-top:7px}
+  .pb-raw{border:1px solid var(--block);border-radius:6px;padding:9px 11px;margin-bottom:10px;
+          font-size:12px;line-height:1.6;color:var(--block);
+          background:color-mix(in srgb,var(--block) 9%,transparent)}
+  /* 验收路线编辑器 */
+  #editor{max-width:min(860px,95vw);width:min(860px,95vw);max-height:92vh}
+  #editor[open]{display:flex;flex-direction:column}
+  #editor .dlg-body{flex:1;min-height:0;overflow:auto}
+  .ed-goal{width:100%;font:13px/1.6 inherit;padding:7px 10px;border:1px solid var(--line);
+           border-radius:5px;background:var(--surface);color:var(--ink);resize:vertical;min-height:46px}
+  .ed-step{margin:0 0 6px;padding:0 0 6px;border-bottom:1px dashed var(--line)}
+  .ed-step-head{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+  .ed-k{font:12.5px var(--mono);color:var(--accent);flex:none}
+  .ed-lbl{font-size:11px;color:var(--muted)}
+  .ed-body{display:grid;gap:5px}
+  .ed-in{width:100%;font:12.5px/1.55 inherit;padding:7px 10px;border:1px solid var(--line);
+         border-radius:5px;background:var(--surface);color:var(--ink);resize:vertical}
+  .ed-check{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:start}
+  .ed-check .dot{color:var(--muted);font-size:13px;line-height:1.9}
+  .ed-x{background:transparent;border:1px solid var(--line);color:var(--muted);
+        border-radius:4px;padding:3px 8px;font-size:12px;line-height:1.2}
+  .ed-x:hover{border-color:var(--fail);color:var(--fail)}
+  .ed-add{background:transparent;border:1px dashed var(--line);color:var(--accent);
+          border-radius:5px;padding:5px 11px;font-size:12px;font-weight:500;width:fit-content}
+  .ed-foot{display:flex;align-items:center;gap:10px;padding:11px 18px;
+           border-top:1px solid var(--line);background:var(--surface)}
+
+  /* 结构化视图：字段名照实显示，跟 yaml 一一对应 */
+  .yv{font:12.5px/1.75 var(--mono);display:grid;gap:1px}
+  .yv .k{color:var(--accent)}
+  .yv .v{color:var(--ink);font-family:system-ui,-apple-system,"PingFang SC",sans-serif;
+         font-size:13px}
+  .yv .row{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:baseline;
+           padding:1px 0}
+  .yv .ind1{padding-left:18px}
+  .yv .ind2{padding-left:36px}
+  .yv .ind3{padding-left:54px}
+  .yv .dash{color:var(--muted)}
+  .yv .evi{color:var(--muted);white-space:pre-wrap;word-break:break-word;
+           border-left:2px solid var(--line);padding-left:9px;margin:2px 0 4px}
+  .yv .res{font-weight:700;padding:0 5px;border-radius:3px;font-size:11.5px}
+  .yv .res.pass{background:color-mix(in srgb,var(--pass) 18%,transparent);color:var(--pass)}
+  .yv .res.fail{background:color-mix(in srgb,var(--fail) 18%,transparent);color:var(--fail)}
+  .yv .res.blocked{background:color-mix(in srgb,var(--block) 18%,transparent);color:var(--block)}
+  .yv .sep{height:9px}
+  .yv .idx{display:inline-block;min-width:20px;margin-right:2px;color:var(--muted);
+           font-size:11px;opacity:.75;user-select:none}
+  .ed-idx{color:var(--muted);font:11px var(--mono);opacity:.75;min-width:20px;user-select:none}
+  .ynote{font-size:11.5px;color:var(--muted);margin:0 0 9px;line-height:1.6}
+
+  #author{max-width:min(680px,94vw);width:min(680px,94vw)}
+  #author[open]{display:block}
+  #author textarea{width:100%;min-height:130px;resize:vertical;font:13px/1.6 inherit;
+                   padding:11px 12px;border:1px solid var(--line);border-radius:6px;
+                   background:var(--surface);color:var(--ink)}
+  #author input[type=text]{width:100%;font:12.5px var(--mono);padding:8px 11px;
+                   border:1px solid var(--line);border-radius:6px;
+                   background:var(--surface);color:var(--ink)}
+  .field{display:grid;gap:5px;margin-bottom:13px}
+  .field label{font-size:12px;color:var(--muted)}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .hint code{background:var(--surface-2);padding:1px 5px;border-radius:3px;font-size:11px}
+  .authlog{margin-top:12px;display:grid;gap:3px;max-height:220px;overflow:auto}
+
+  /* 验收路线编辑器 */
+  #editor{max-width:min(860px,95vw);width:min(860px,95vw);max-height:92vh}
+  #editor[open]{display:flex;flex-direction:column}
+  #editor .dlg-body{flex:1;min-height:0;overflow:auto}
+  .ed-goal{width:100%;font:13px/1.6 inherit;padding:7px 10px;border:1px solid var(--line);
+           border-radius:5px;background:var(--surface);color:var(--ink);resize:vertical;min-height:46px}
+  .ed-step{margin:0 0 6px;padding:0 0 6px;border-bottom:1px dashed var(--line)}
+  .ed-step-head{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+  .ed-k{font:12.5px var(--mono);color:var(--accent);flex:none}
+  .ed-lbl{font-size:11px;color:var(--muted)}
+  .ed-body{display:grid;gap:5px}
+  .ed-in{width:100%;font:12.5px/1.55 inherit;padding:7px 10px;border:1px solid var(--line);
+         border-radius:5px;background:var(--surface);color:var(--ink);resize:vertical}
+  .ed-check{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:start}
+  .ed-check .dot{color:var(--muted);font-size:13px;line-height:1.9}
+  .ed-x{background:transparent;border:1px solid var(--line);color:var(--muted);
+        border-radius:4px;padding:3px 8px;font-size:12px;line-height:1.2}
+  .ed-x:hover{border-color:var(--fail);color:var(--fail)}
+  .ed-add{background:transparent;border:1px dashed var(--line);color:var(--accent);
+          border-radius:5px;padding:5px 11px;font-size:12px;font-weight:500;width:fit-content}
+  .ed-foot{display:flex;align-items:center;gap:10px;padding:11px 18px;
+           border-top:1px solid var(--line);background:var(--surface)}
+
+  /* 验收路线 / 判定结果的可视化 */
+  .legend{display:grid;gap:5px;background:var(--surface-2);border:1px solid var(--line);
+          border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted);margin-bottom:12px}
+  .legend b{color:var(--ink);font-weight:600}
+
+  .vstep{border:1px solid var(--line);border-radius:7px;margin-bottom:10px;overflow:hidden}
+  .vstep-head{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;background:var(--surface-2)}
+  .vstep-num{flex:none;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;
+             font:11px/20px var(--mono);text-align:center;font-weight:700}
+  .vstep-go{font-size:13px;font-weight:600;line-height:1.45}
+  .vstep-how{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+  .vstep-body{padding:9px 12px;display:grid;gap:8px}
+
+  .vcheck{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start}
+  .vmark{flex:none;width:18px;height:18px;border-radius:4px;font:11px/18px system-ui;
+         text-align:center;font-weight:700}
+  .vmark.pass{background:color-mix(in srgb,var(--pass) 18%,transparent);color:var(--pass)}
+  .vmark.fail{background:color-mix(in srgb,var(--fail) 18%,transparent);color:var(--fail)}
+  .vmark.blocked{background:color-mix(in srgb,var(--block) 18%,transparent);color:var(--block)}
+  .vfact{font-size:12.5px;line-height:1.5}
+  .vevi{margin-top:5px;border-left:2px solid var(--line);padding:4px 0 4px 9px;
+        font:11.5px/1.55 var(--mono);color:var(--muted);white-space:pre-wrap;word-break:break-word}
+  .vevi .lbl{display:block;font-family:system-ui;font-size:10.5px;color:var(--accent);
+             letter-spacing:.03em;margin-bottom:2px}
+  .vnote{margin-top:4px;font-size:11.5px;color:var(--muted)}
+  .vgoal{font-size:13px;padding:9px 12px;background:var(--surface-2);border-radius:6px;
+         margin-bottom:10px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="19" height="19" rx="5" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6 12.5c2.5 0 3.5-5 6-5s3.5 5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="6" cy="12.5" r="1.4" fill="currentColor"/><circle cx="16.5" cy="12.5" r="1.4" fill="currentColor"/></svg></span>
+  <div class="titles"><h1>Roadbook Runner</h1>
+    <span class="sub">用大白话说清要验什么，机器自己去点，独立裁判给结论</span></div>
+  <span class="spacer"></span>
+  <button class="link" id="onboard-btn" onclick="toggleOnboard()">第一次用？</button>
+  <button class="ghost" onclick="openMemory()">记忆<span class="cnt" id="mem-count" hidden></span></button>
+  <button class="ghost" onclick="runAll()">全部跑一遍</button>
+  <button class="ghost" onclick="newProject()">＋ 新建项目</button>
+  <button class="primary" onclick="openAuthor()">＋ 新建场景</button>
+</header>
+
+<!-- 上手三步 + 结论怎么读。默认收起，第一次打开页面自动展开一次，关掉就记住 -->
+<section class="onboard" id="onboard" hidden>
+  <div class="steps">
+    <div><b>1</b><div><h4>说清要验什么</h4><p>「＋ 新建场景」，一段大白话：打开哪里、做什么、看到什么算成功。机器整理成<b>要验什么</b>和<b>怎么算过</b>。</p></div></div>
+    <div><b>2</b><div><h4>跑一下</h4><p>第一次自己摸路并记下来，之后照路线走。卡在只有你知道的事上会问你。</p></div></div>
+    <div><b>3</b><div><h4>看结论</h4><p>独立裁判照「怎么算过」取证：
+      <span class="pill PASS">PASS</span> 全过　<span class="pill FAIL">FAIL</span> 产品有问题　<span class="pill BLOCK">BLOCK</span> 卡住没验完　<span class="pill ASK">ASK</span> 等你回答</p></div></div>
+  </div>
+  <div class="foot"><span>你只管<b>要验什么</b>和<b>怎么算过</b>；「机器怎么走」是它自己记的。</span>
+    <button class="ghost" onclick="toggleOnboard(false)">知道了</button></div>
+</section>
+
+<main>
+  <div class="overview" id="overview"></div>
+  <div class="grid" id="grid"><div class="empty">加载中…</div></div>
+</main>
+
+<dialog id="ask"><div class="dlg-head">
+    <b id="ask-title" style="font-family:var(--mono);font-size:13px"></b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="document.querySelector('#ask').close()">关闭</button>
+  </div><div class="dlg-body">
+    <p class="ynote">agent 探索到一半卡住了，它需要只有你知道的信息。
+      <b>现场已经冻结</b>——你回答完它从断点接着跑，不会从头重新探索。</p>
+    <div class="asks" id="ask-list"></div>
+    <div style="display:flex;gap:9px;margin-top:15px;align-items:center">
+      <button onclick="submitAnswers()">回答并接着跑</button>
+      <span class="hint" id="ask-status"></span>
+    </div>
+  </div></dialog>
+
+<dialog id="pbed"><div class="dlg-head">
+    <b id="pb-title" style="font-family:var(--mono);font-size:13px"></b>
+    <span style="margin-left:auto"></span>
+    <span class="hint" id="pb-status"></span>
+    <button class="ghost" onclick="document.querySelector('#pbed').close()">关闭</button>
+  </div>
+  <div class="dlg-body">
+    <div class="tabs" style="margin-top:0;padding-top:0">
+      <button data-pbtab="intent" class="on" onclick="pbTab('intent')">要验什么<small>intent.md</small></button>
+      <button data-pbtab="expect" onclick="pbTab('expect')">怎么算过<small>expect.yaml</small></button>
+      <button data-pbtab="playbook" onclick="pbTab('playbook')">机器怎么走<small>playbook.md · 它自己记的</small></button>
+    </div>
+    <div class="pane" data-pbpane="intent"><div id="pb-intentbox"></div></div>
+    <div class="pane" data-pbpane="expect" hidden><div id="pb-expectbox"></div></div>
+    <div class="pane" data-pbpane="playbook" hidden><div id="pb-playbook"></div></div>
+  </div>
+</dialog>
+
+<dialog id="editor"><div class="dlg-head">
+    <b id="ed-title" style="font-family:var(--mono);font-size:13px"></b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="document.querySelector('#editor').close()">关闭</button>
+  </div>
+  <div class="dlg-body" id="ed-mount"></div>
+</dialog>
+
+<dialog id="memdlg"><div class="dlg-head">
+    <b style="font-size:14px">记忆 · 原子建议区</b>
+    <span style="margin-left:auto"></span>
+    <span class="hint" id="mem-status"></span>
+    <button class="ghost" onclick="document.querySelector('#memdlg').close()">关闭</button>
+  </div><div class="dlg-body" id="mem-body"></div></dialog>
+
+<dialog id="author"><div class="dlg-head">
+    <b id="author-title" style="font-size:14px">新建场景</b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="document.querySelector('#author').close()">关闭</button>
+  </div><div class="dlg-body author">
+    <p class="au-intro" id="author-hint"></p>
+
+    <div class="au-main">
+      <div class="au-label"><span>一段话说清：<b>打开哪里 → 做什么 → 页面上看到什么算成功</b></span>
+        <span class="au-eg" id="author-examples"><span>例子：</span></span></div>
+      <textarea id="author-ask" rows="6" placeholder="打开项目列表页，新建一个叫「回归测试-今天日期」的项目。建完回到列表，能看到这个名字的卡片，刷新一次还在。"></textarea>
+    </div>
+
+    <div class="au-more">
+      <details><summary>怎样写机器才能验</summary>
+        <table class="goodbad">
+          <tr><th>✓ 能验</th><th>✗ 验不了</th></tr>
+          <tr><td>刷新后这条记录还在列表里</td><td>点了保存按钮<span>动作不是结果</span></td></tr>
+          <tr><td>页面出现「保存成功」</td><td>按钮变蓝了<span>颜色读不到，只认页面上的文字</span></td></tr>
+          <tr><td>项目卡片上的名字等于刚填的那个</td><td>看起来没问题<span>没有可核对的东西</span></td></tr>
+        </table></details>
+      <details id="author-cfg-wrap"><summary>可用的环境和账号<small>写「用测试账号登录」就行，具体是哪个看这里</small></summary>
+        <div id="author-cfg"></div></details>
+      <details id="author-url-field"><summary>被测页面地址<small>不填就用这个技能默认的</small></summary>
+        <input type="text" id="author-url" placeholder="http://localhost:4173/"/></details>
+      <details id="author-proj-field"><summary>放进哪个项目<small>项目 = 被测对象，scenarios/ 下的分组文件夹</small></summary>
+        <select id="author-proj"></select></details>
+    </div>
+
+    <div class="au-foot">
+      <button id="author-go" onclick="submitAuthor()">生成</button>
+      <label class="au-run"><input type="checkbox" id="author-run" checked/>生成完直接跑一次</label>
+      <span class="hint" id="author-status"></span>
+    </div>
+    <div class="authlog" id="author-log"></div>
+  </div></dialog>
+
+<dialog id="player"><div class="dlg-head">
+    <b id="player-title" style="font-family:var(--mono);font-size:13px"></b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" id="sw-runner" onclick="switchCam('runner')">执行</button>
+    <button class="ghost" id="sw-judge" onclick="switchCam('judge')">裁判</button>
+    <button class="ghost" onclick="closePlayer()">关闭</button>
+  </div><div class="dlg-body">
+    <video id="player-video" autoplay muted playsinline onclick="togglePlay()"></video>
+    <div class="vbar">
+      <button id="vp-toggle" onclick="togglePlay()" title="播放/暂停">▶</button>
+      <span class="time" id="vp-cur">0:00</span>
+      <div class="scrub" id="vp-scrub">
+        <div class="track"></div><div class="fill" id="vp-fill"></div><div class="knob" id="vp-knob"></div>
+      </div>
+      <span class="time" id="vp-dur">0:00</span>
+    </div>
+  </div></dialog>
+
+<dialog id="dlg"><div class="dlg-head">
+    <b id="dlg-title" style="font-family:var(--mono);font-size:13px"></b>
+    <span id="dlg-pill"></span>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="exportRunHtml()">导出 HTML</button>
+    <button class="ghost" onclick="dlg.close()">关闭</button>
+  </div><div class="dlg-body" id="dlg-body"></div></dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const dlg = $('#dlg');
+let state = [];                 // 场景列表
+const running = {};             // scenario -> {run_id, step}
+let PROJECTS = {};              // skill -> [项目名]，含空项目；移动/新建场景的下拉来源
+const COLLAPSED = new Set(JSON.parse(localStorage.getItem('proj-collapsed') || '[]'));
+
+async function load(){
+  const skills = await (await fetch('/api/skills')).json();
+  state = skills.flatMap(sk => sk.scenarios.map(s => ({...s, skill: sk.name})));
+  PROJECTS = Object.fromEntries(skills.map(sk => [sk.name, sk.projects || []]));
+  render();
+  reattachRunning();
+  refreshMemoryCount();
+}
+
+// ---- 项目管理：新建 / 改名 / 删空项目 / 场景在项目间移动 / 分组折叠 ----
+function firstSkill(){ return state[0]?.skill; }
+
+async function newProject(){
+  const skill = firstSkill();
+  if(!skill){ alert('没找到技能目录'); return; }
+  const name = prompt('新项目名 = 被测对象的名字（比如 my-app）。场景建在它下面。');
+  if(!name) return;
+  const r = await fetch('/api/projects', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({skill, name: name.trim()})});
+  if(!r.ok){ alert((await r.json()).detail || '创建失败'); return; }
+  await load();
+}
+
+async function renameProj(proj, skill){
+  const to = prompt(`把项目 ${proj} 改名为：`, proj);
+  if(!to || to === proj) return;
+  const r = await fetch('/api/projects/rename', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({skill, name: proj, to: to.trim()})});
+  if(!r.ok){ alert((await r.json()).detail || '改名失败'); return; }
+  COLLAPSED.delete(proj);
+  await load();
+}
+
+async function deleteProj(proj, skill){
+  if(!confirm(`删除项目 ${proj}？只有空项目能删；里面还有场景会被拒绝。`)) return;
+  const r = await fetch(`/api/projects/${encodeURIComponent(proj)}?skill=${encodeURIComponent(skill)}`, {method:'DELETE'});
+  if(!r.ok){ alert((await r.json()).detail || '删除失败'); return; }
+  COLLAPSED.delete(proj);
+  await load();
+}
+
+async function moveScenario(name, project, skill){
+  if(!project) return;
+  const to = project === '~root~' ? '' : project;
+  if(to && !confirm(`把场景 ${name} 移到项目 ${to}？`)){ render(); return; }
+  const r = await fetch(`/api/scenarios/${encodeURIComponent(name)}/move`,
+    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({skill, project: to})});
+  if(!r.ok){ alert((await r.json()).detail || '移动失败'); }
+  await load();
+}
+
+function toggleProj(proj){
+  COLLAPSED.has(proj) ? COLLAPSED.delete(proj) : COLLAPSED.add(proj);
+  localStorage.setItem('proj-collapsed', JSON.stringify([...COLLAPSED]));
+  render();
+}
+
+// 卡片上的「移动到…」下拉：列出其它项目 + 移出分组。当前无处可去时不渲染。
+function projMovePicker(s, running_){
+  const projects = PROJECTS[s.skill] || [];
+  const others = projects.filter(p => p !== (s.project || ''));
+  const toRoot = s.project ? [`<option value="~root~">（移出项目，不分组）</option>`] : [];
+  if(!others.length && !toRoot.length) return '';
+  return `<select class="envsel" title="移动到别的项目" ${running_?'disabled':''}
+      onchange="moveScenario('${esc(s.name)}', this.value, '${esc(s.skill)}')">
+    <option value="">移动到…</option>${toRoot.join('')}${others.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select>`;
+}
+
+// 服务端说还在跑、本页却没盯着它 —— 接回去。
+// running[] 只活在「发起跑批的那个标签页」里，刷新一次实时画面就没了：卡片退回成
+// 「上次跑批 · 点击回放」的封面，状态药丸却还写着 running，看着就像死了
+// （2026-09-22 实测撞上）。现在刷新、甚至换个浏览器打开，都能重新接上。
+function reattachRunning(){
+  for(const s of state){
+    if(s.last?.status === 'running' && !running[s.name]) attach(s.name, s.last.run_id, '重新接上…');
+  }
+}
+
+function stageOf(s){
+  const r = running[s.name];
+  // 缓存穿透：这个 <img> 背后是一条 multipart/x-mixed-replace 长连接，服务端已经给了
+  // Cache-Control: no-store，但刷新页面时（不是这条 SSE 增量更新时）不同浏览器对
+  // "同一个 URL 的流式响应要不要复用旧连接"处理不一致——2026-09-24 用户反馈过一次
+  // "刷新画面不动，要等下一步才刷新"，像是浏览器把上一条连接当缓存续用了。
+  // 每次真正重新渲染（页面刷新重新 attach 时）都带一个新时间戳，让浏览器没法认成同一个请求。
+  if(r) return `
+    <img src="/api/runs/${r.run_id}/live.mjpeg?t=${Date.now()}" alt="实时画面"/>
+    <div class="badge"><span class="live-dot"></span>
+      <span class="stagelabel" style="position:static">LIVE</span></div>
+    <div class="stagelabel">${r.phase || '执行中'}</div>
+    <div class="nowstep">${r.step || '启动中…'}</div>`;
+  if(s.last) return `
+    <img src="/api/runs/${s.last.run_id}/poster" alt="上次跑批最后画面"/>
+    <button class="playbtn" title="播放录屏"
+            onclick="play('${s.last.run_id}','${s.name}')">
+      <span class="disc"><svg width="22" height="24" viewBox="0 0 22 24" fill="#fff">
+        <path d="M2 1.8 20 12 2 22.2z"/></svg></span>
+    </button>
+    <div class="stagelabel">上次跑批 · 点击回放</div>`;
+  return `<div class="idle"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <circle cx="12" cy="12" r="9.5"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor" stroke="none"/></svg>
+    <div>还没跑过</div><small>点「跑一下」，第一次它会自己摸路</small></div>`;
+}
+
+// 卡片按结论归类，概览条按这个数、也按这个筛
+const BUCKET_OF = {PASS:'pass', passed:'pass', FAIL:'fail', failed:'fail', BLOCK:'block', blocked:'block', error:'block',
+                   ASK:'ask', needs_input:'ask', running:'running'};
+const BUCKETS = [['all','全部'],['pass','通过'],['fail','有问题'],['block','卡住'],['ask','等你回答'],['running','在跑'],['never','没跑过']];
+let FILTER = 'all';
+function bucketOf(s){
+  if(running[s.name]) return 'running';
+  if(!s.last) return 'never';
+  return BUCKET_OF[s.last.verdict] || BUCKET_OF[s.last.status] || 'other';
+}
+function ago(iso){
+  if(!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime(); if(!(ms >= 0)) return '';
+  const m = Math.round(ms/60000); if(m < 1) return '刚刚'; if(m < 60) return `${m} 分钟前`;
+  const h = Math.round(m/60); if(h < 24) return `${h} 小时前`;
+  const d = Math.round(h/24); if(d < 30) return `${d} 天前`;
+  return iso.slice(0, 10);
+}
+// 最近几次的结论，一个点一次；看一眼就知道这条路稳不稳
+function trendDots(s){
+  const rows = (s.trend || []).slice(-5);
+  if(rows.length < 2) return '';
+  return `<span class="trend" title="最近 ${rows.length} 次：${rows.map(r => r.verdict || r.status).join(' → ')}">${
+    rows.map(r => `<i class="${BUCKET_OF[r.verdict] || BUCKET_OF[r.status] || 'other'}"></i>`).join('')}</span>`;
+}
+function setFilter(f){ FILTER = f; render(); }
+
+function render(){
+  // 概览条：数字 + 筛选
+  const counts = {}; for(const s of state) counts[bucketOf(s)] = (counts[bucketOf(s)] || 0) + 1;
+  $('#overview').innerHTML = state.length ? `
+    <div class="ov-chips">${BUCKETS.map(([k, label]) => {
+      const n = k === 'all' ? state.length : (counts[k] || 0);
+      if(k !== 'all' && !n) return '';
+      return `<button class="ov-chip ${k} ${FILTER === k ? 'on' : ''}" onclick="setFilter('${k}')"><b>${n}</b>${label}</button>`;
+    }).join('')}</div>` : '';
+
+  const shown = state.filter(s => FILTER === 'all' || bucketOf(s) === FILTER);
+  // 项目分组（roadbook scenarios/<项目>/<场景>/）。'' 是平铺未分组，不渲染组头，看板和从前一样。
+  const byProj = new Map();
+  for(const s of shown){
+    const k = s.project || '';
+    if(!byProj.has(k)) byProj.set(k, []);
+    byProj.get(k).push(s);
+  }
+  const main = [...byProj.entries()].map(([proj, list]) => `
+    ${proj ? `<div class="proj-head">
+        <button class="proj-toggle" title="${COLLAPSED.has(proj)?'展开':'折叠'}" onclick="toggleProj('${esc(proj)}')">${COLLAPSED.has(proj)?'▸':'▾'}</button>
+        <span class="proj-name">${esc(proj)}</span><span class="proj-n">${list.length} 个场景</span>
+        <span class="sp"></span>
+        <button class="ghost sm" onclick="renameProj('${esc(proj)}','${esc(list[0].skill)}')">改名</button>
+        <button class="ghost sm" onclick="deleteProj('${esc(proj)}','${esc(list[0].skill)}')">删除</button>
+      </div>` : ''}
+    ${COLLAPSED.has(proj) ? '' : list.map(s => {
+    const r = running[s.name];
+    const verdict = r ? 'running' : (s.last?.verdict || s.last?.status || '');
+    const bucket = bucketOf(s);
+    const when = r ? '' : ago(s.last?.finished_at);
+    return `
+    <article class="tile ${r?'running':''}" data-scenario="${esc(s.name)}">
+      <div class="stage">${stageOf(s)}</div>
+      <div class="meta">
+        <div class="head">
+          <div class="titles">
+            <div class="title">${inline(s.title || s.name)}</div>
+            ${s.title ? `<div class="slug">${esc(s.name)}</div>` : ''}
+          </div>
+          ${verdict ? `<span class="pill ${verdict}" title="${VERDICT_HELP[verdict]||''}">${verdict}</span>` : ''}
+        </div>
+        <div class="desc">${esc(s.description || '')}</div>
+        <div class="status">
+          ${trendDots(s)}
+          ${when ? `<span>${when}</span>` : ''}
+          <span class="route" title="${s.has_playbook ? '之前跑通过，机器记下了路线，这次照着走' : '还没跑通过，第一次跑会自己摸路，摸通的步骤当场记下来'}">
+            ${s.has_playbook ? '有路线' : '第一次跑会自己摸路'}</span>
+        </div>
+      </div>
+      <div class="actions">
+        ${s.last && s.last.status === 'needs_input'
+          ? `<button class="primary" onclick="openAsk('${s.last.run_id}','${s.name}')">回答 →</button>` : ''}
+        <button class="ghost sm" onclick="openPlaybook('${s.name}','${s.skill}')">改要求</button>
+        ${s.last ? `<button class="ghost sm" onclick="detail('${s.last.run_id}')">看结论</button>` : ''}
+        <span class="sp"></span>
+        ${r ? `<button class="danger sm" onclick="stopRun('${r.run_id}','${s.name}')" ${r.stopping?'disabled':''}>
+                 ${r.stopping?'停止中…':'停止'}</button>`
+            : ''}
+        ${envPicker(s, r)}
+        ${projMovePicker(s, r)}
+        <button class="primary sm" onclick="run('${s.name}','${s.skill}')" ${r?'disabled':''}>
+          ${r?'跑着…':'跑一下'}</button>
+      </div>
+    </article>`;
+    }).join('')}`).join('');
+  // 空项目也要露脸：建了文件夹还没场景的（比如刚规划的定量），渲染一个空组头
+  const empties = [...new Set(Object.values(PROJECTS).flat())]
+    .filter(p => !byProj.has(p));
+  $('#grid').innerHTML = main + empties.map(p => `
+    <div class="proj-head">
+        <span class="proj-name">${esc(p)}</span><span class="proj-n">空项目，还没有场景</span>
+        <span class="sp"></span>
+        <button class="ghost sm" onclick="renameProj('${esc(p)}','${esc(firstSkill())}')">改名</button>
+        <button class="ghost sm" onclick="deleteProj('${esc(p)}','${esc(firstSkill())}')">删除</button>
+      </div>`).join('')
+   || (state.length ? `<div class="empty">这一类里没有场景。<a href="#" onclick="setFilter('all');return false">看全部</a></div>`
+                    : '<div class="empty">没找到场景，检查技能目录</div>');
+}
+
+// 跑哪个环境。`envs: [dev, prod]` 这行早就写在 intent.md 的 frontmatter 里了，
+// 但一直只是个展示标签——运行时从不读它，看板于是只能跑 config/env.json 当前指着的那个。
+// 现在它是一个真的入参：选了哪个，任务说明里就点名哪个，也记进 run.json。
+// 只给出场景自己声明过的选项，`envs: [dev]` 的场景不会因为误点打到 prod。
+const ENV_PICK = {};
+function envPicker(s, running_){
+  const envs = s.envs || [];
+  if(envs.length < 2) return envs.length === 1 ? `<span class="chip env">${esc(envs[0])}</span>` : '';
+  const cur = ENV_PICK[s.name] || s.default_env || envs[0];
+  return `<select class="envsel" title="跑哪个环境" ${running_?'disabled':''}
+      onchange="ENV_PICK['${s.name}']=this.value">
+    ${envs.map(e=>`<option value="${esc(e)}" ${e===cur?'selected':''}>${esc(e)}</option>`).join('')}</select>`;
+}
+
+async function run(name, skill){
+  if(running[name]) return;
+  const env = ENV_PICK[name] || null;
+  // 换环境要拦一下。以前打 prod 得去改 config/env.json——那是个刻意动作；
+  // 现在它只是个下拉框，顺手选错就打到线上了。只在「不是这个场景的默认环境」时问。
+  const sc = (state || []).find(s => s.name === name);
+  if(env && sc && sc.default_env && env !== sc.default_env
+     && !confirm(`这次要跑的是 ${env}，不是 ${name} 的默认环境（${sc.default_env}）。确定？`)) return;
+  const r = await (await fetch('/api/runs',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({scenario:name, skill, env})})).json();
+  attach(name, r.run_id);
+}
+
+// 盯住一个在跑的跑批：实时画面 + 步骤推送。发起跑批和「刷新后重新接上」共用这一条路——
+// 以前订阅逻辑长在 run() 里面，页面一刷新就再也接不回去了。
+function attach(name, run_id, step = '启动中…'){
+  running[name] = {run_id, step, phase:'执行中'};
+  render();
+
+  const es = new EventSource(`/api/runs/${run_id}/events`);
+  es.onmessage = ev => {
+    const {kind, payload} = JSON.parse(ev.data);
+    const cur = running[name];
+    if(!cur) return;
+    if(kind === 'phase')  cur.phase = payload;
+    if(kind === 'judge_step') cur.phase = '裁判取证';
+    if(kind === 'step' || kind === 'judge_step'){
+      cur.step = `${payload.n}. ${payload.tool} ${JSON.stringify(payload.args||{}).slice(0,60)}`;
+    }
+    if(kind === 'done'){ es.close(); delete running[name]; load(); return; }
+    // 只刷新那张卡的文字层，别重建 img 否则 MJPEG 流会断。
+    // 卡片重排过之后（标题从目录名换成 title/slug）这里曾经按 .name 找卡片——
+    // 那个 class 早就不存在了，选择器永远找不到，这段代码悄悄失效了快一天：
+    // running[] 在内存里一直更新对，画面上的「第几步」却冻结在刚 attach 那一刻，
+    // 看着像卡死。现在按 data-scenario 找，跟标题渲染方式脱钩。
+    const tile = document.querySelector(`.tile.running[data-scenario="${CSS.escape(name)}"]`);
+    if(tile){
+      tile.querySelector('.nowstep').textContent = cur.step;
+      const lab = tile.querySelectorAll('.stagelabel');
+      if(lab[1]) lab[1].textContent = cur.phase;
+    }
+  };
+}
+
+async function stopRun(runId, name){
+  // 只是发信号——工作线程在下一个安全点自己收口，卡片真正切走要等 SSE 的 done 事件，
+  // 中间这几秒显示「停止中…」，别让人以为没点上又戳第二下。
+  const cur = running[name];
+  if(!cur || cur.stopping) return;
+  cur.stopping = true; render();
+  try{
+    const res = await fetch(`/api/runs/${runId}/stop`, {method:'POST'});
+    if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
+  }catch(e){
+    cur.stopping = false; render();
+    alert('停止失败：' + e.message);
+  }
+}
+
+async function runAll(){
+  for(const s of state) if(!running[s.name]) { await run(s.name, s.skill); await new Promise(r=>setTimeout(r,800)); }
+}
+
+// ---- 结论怎么读：卡片药丸的 title、上手面板共用一份 ----
+const VERDICT_HELP = {
+  PASS:'全部检查通过', passed:'全部检查通过',
+  FAIL:'有检查没过——产品这里有问题', failed:'有检查没过——产品这里有问题',
+  BLOCK:'卡住了没验完：环境、流程或取不到证，不是产品失败', blocked:'卡住了没验完：环境、流程或取不到证，不是产品失败',
+  ASK:'机器停下来等你回答', needs_input:'机器停下来等你回答',
+  running:'正在跑', error:'运行时出错，没跑完', stopped:'被人手动停掉', STOPPED:'被人手动停掉',
+  EXPLORED:'只做了探索，没有验收路线可判',
+};
+
+// ---- 记忆：原子建议区。模型只能提议和投票，这里是人的终审——确认直接落盘、否决直接丢；
+//      改「它长什么样」只有这一条路能落。数据全来自 /api/memory，不在前端算票。 ----
+const MEM_KIND = {variant:'变体', failure_mode:'坑', canonical:'改老做法'};
+function ago2(iso){ return ago(iso) || iso; }
+async function refreshMemoryCount(){
+  try{
+    const m = await (await fetch('/api/memory')).json();
+    const el = $('#mem-count'); if(!el) return;
+    const n = (m.candidates||[]).length;
+    el.textContent = n; el.hidden = !m.enabled || !n;
+  }catch(e){}
+}
+async function openMemory(){
+  $('#memdlg').showModal(); $('#mem-body').innerHTML = '<div class="empty">读取中…</div>';
+  await renderMemory();
+}
+async function renderMemory(){
+  const m = await (await fetch('/api/memory')).json();
+  const box = $('#mem-body');
+  if(!m.enabled){ box.innerHTML = '<div class="empty">记忆层已关闭（QA_AGENT_ATOM_MEMORY=off）。</div>'; return; }
+  const th = m.thresholds || {};
+  const cands = m.candidates || [];
+  const rows = cands.map(c => `<div class="mem-c ${c.ready?'ready':''} ${c.kind}">
+      <div class="mem-head">
+        <span class="cvar cfg" title="节点">${esc(c.node)}</span>
+        <span class="tag ${c.kind==='canonical'?'req':''}">${MEM_KIND[c.kind]||c.kind}</span>
+        <span class="mem-votes" title="确认 / 需要 · 否决">
+          <b class="${c.confirms>=c.need?'ok':''}">${c.confirms}/${c.need}</b> 确认
+          ${c.refutes?`<b class="bad">${c.refutes}</b> 否决`:''}</span>
+        ${c.ready?'<span class="tag ok">票够了，等人点</span>':''}
+        <span class="sp"></span>
+        <span class="mem-src">${esc(c.scenario||'?')} 提的 · ${ago2(c.proposed_at)}</span>
+      </div>
+      <div class="mem-text">${inline(c.text)}</div>
+      <div class="mem-act">
+        <button class="primary sm" onclick="memVote('${c.id}','confirm')">${c.kind==='canonical'?'确认，改老做法':'确认，落盘'}</button>
+        <button class="danger sm" onclick="memVote('${c.id}','refute')">不对，丢掉</button>
+        <span class="hint">${c.votes.map(v=>`${v.verdict==='confirm'?'✓':'✗'} ${esc(v.scenario||v.run_id)}：${esc(v.why||'')}`).join('　')}</span>
+      </div></div>`).join('');
+  const promoted = (m.promoted||[]).map(e => `<div class="mem-p">
+      <span class="cvar cfg">${esc(e.node)}</span><span class="tag">${MEM_KIND[e.kind]||e.kind}</span>
+      <span>${inline(e.text||'')}</span>
+      <span class="mem-src">${ago2(e.at)}${e.by && e.by!=='votes'?' · 人工':''}${(e.refutes||[]).length?` · <b class="bad">${e.refutes.length}</b> 票否决/${th.demote}`:''}</span></div>`).join('');
+  const recent = (m.recent||[]).slice(0,14).map(r => `<div class="mem-r"><span class="t">${esc((r.at||'').slice(5,16))}</span>
+      <span class="e ${r.event}">${esc(r.event)}</span><span class="cvar cfg">${esc(r.node||'')}</span>
+      <span class="hint">${esc(r.text||r.why||r.reason||'')}</span></div>`).join('');
+  box.innerHTML = `
+    <p class="au-intro">模型只能<b>提议</b>和<b>投票</b>，这里是人的终审。追加要 <b>${th.append}</b> 票（另一次跑批投的）才自动落盘，
+      改「它长什么样」要 <b>${th.canonical}</b> 票且只在这里由人落；否决 <b>${th.drop}</b> 票丢，<b>${th.ttl_days}</b> 天没人验证过期；
+      已落盘的被 <b>${th.demote}</b> 个跑批否决就划掉。落盘的都是未提交的改动，最后还是要看 diff。</p>
+    <h4 class="mem-h">待验证 <span class="count">${cands.length}</span></h4>
+    ${rows || '<div class="empty">建议区是空的——跑批里没人提新东西，或者都已经落盘 / 过期了。</div>'}
+    <h4 class="mem-h">最近落盘 <span class="count">${(m.promoted||[]).length}</span></h4>
+    ${promoted || '<div class="empty">还没有。</div>'}
+    <h4 class="mem-h">账本</h4>
+    <div class="mem-ledger">${recent || '<div class="empty">空。</div>'}</div>`;
+}
+async function memVote(id, verdict){
+  const label = verdict === 'confirm' ? '确认并落盘' : '丢掉';
+  if(!confirm(`${label}这条候选？这一票是终审。`)) return;
+  const r = await (await fetch(`/api/memory/${id}/vote`, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({verdict})})).json();
+  $('#mem-status').textContent = r.message || '';
+  await renderMemory(); refreshMemoryCount();
+}
+
+// ---- 上手面板：第一次打开自动展开一次，点「知道了」就记住 ----
+function toggleOnboard(force){
+  const el = $('#onboard');
+  const show = force === undefined ? el.hidden : !!force;
+  el.hidden = !show;
+  try{ localStorage.setItem('onboard.dismissed', show ? '' : '1'); }catch(e){}
+}
+try{ if(!localStorage.getItem('onboard.dismissed')) toggleOnboard(true); }catch(e){}
+
+// ---- 新建 / 改场景：人用大白话描述，agent 翻译成 intent.md + expect.yaml ----
+let authoring = null;         // null = 新建；场景名 = 改这个场景
+const AUTHOR_EXAMPLES = [
+  ['登录', '打开首页，用邮箱验证码登录。登录后落到工作台首页，页面上不再出现「获取验证码」，刷新一次还是登录态。'],
+  ['新建一条', '打开列表页，新建一条叫「回归-今天日期」的记录。建完回到列表能看到这个名字的卡片，刷新一次还在。'],
+  ['搜索', '在搜索框搜一个固定的词，结果页第一条点进去，落地页标题或正文里能看到这个词。'],
+];
+function openAuthor(scenario){
+  authoring = scenario || null;
+  $('#author-title').textContent = scenario ? `改场景 ${scenario}` : '新建场景';
+  $('#author-hint').innerHTML = scenario
+    ? '说清你想改什么就行，它会读现在的版本在上面改，不动无关的部分。'
+    : '用大白话描述就行。机器整理成「要验什么」和「怎么算过」两份给你看；怎么点、用哪个环境账号、怎么清理都不用你写。';
+  // 有哪些环境、用哪个账号——写场景的人得看得见，不然只能凭空猜
+  loadSkillCfg(state[0]?.skill).then(() => {
+    const table = cfgTableHtml();
+    $('#author-cfg').innerHTML = table;
+    $('#author-cfg-wrap').hidden = !table;
+  });
+  $('#author-url-field').hidden = !!scenario;
+  $('#author-examples').hidden = !!scenario;
+  $('#author-examples').querySelectorAll('a').forEach(a => a.remove());
+  for(const [label, text] of AUTHOR_EXAMPLES){
+    const a = document.createElement('a'); a.href = '#'; a.textContent = label;
+    a.onclick = e => { e.preventDefault(); $('#author-ask').value = text; $('#author-ask').focus(); };
+    $('#author-examples').appendChild(a);
+  }
+  // 项目归属：新建时可选；改场景时不挪窝，字段藏起来
+  const projField = $('#author-proj-field');
+  if(scenario){
+    projField.hidden = true;
+  }else{
+    projField.hidden = false;
+    const projects = PROJECTS[firstSkill()] || [];
+    $('#author-proj').innerHTML = `<option value="">（不分组，放根目录）</option>` +
+      projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+    $('#author-proj').value = projects[0] || '';
+  }
+  document.querySelectorAll('#author .au-more details').forEach(d => d.open = false);
+  $('#author-ask').value = '';
+  $('#author-status').textContent = '';
+  $('#author-log').innerHTML = '';
+  $('#author-go').disabled = false;
+  $('#author').showModal();
+}
+async function submitAuthor(){
+  const ask = $('#author-ask').value.trim();
+  if(!ask){ $('#author-status').textContent = '先写点什么'; return; }
+  $('#author-go').disabled = true;
+  $('#author-status').textContent = '整理中…（它会先读现有场景学格式，约一分钟）';
+  $('#author-log').innerHTML = '';
+  try{
+    const r = await (await fetch('/api/scenarios/author', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ask, scenario: authoring, url: $('#author-url').value.trim() || null,
+        project: authoring ? null : ($('#author-proj')?.value || null)})
+    })).json();
+    $('#author-status').textContent = r.ok ? '✓ 完成' : '没有产出，看下面';
+    $('#author-log').innerHTML = `
+      <div style="font-size:12.5px;margin-bottom:7px">${esc(r.summary || '')}</div>
+      ${(r.files||[]).map(f => `<div class="step"><span>✎</span>
+        <span class="t">写入</span><span class="a">${esc(f)}</span></div>`).join('')}
+      ${r.notes ? `<div class="hint" style="margin-top:8px">${esc(r.notes)}</div>` : ''}`;
+    await load();
+    // 生成完直接跑：以前这个勾选框只是画在那里，没接线
+    if(r.ok && r.scenario && $('#author-run').checked && !authoring){
+      const sc = state.find(s => s.name === r.scenario);
+      if(sc){ $('#author').close(); run(sc.name, sc.skill); }
+    }
+  }catch(e){
+    $('#author-status').textContent = '出错了：' + e;
+  }
+  $('#author-go').disabled = false;
+}
+
+const fmt = s => (isFinite(s) ? `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` : '0:00');
+
+function togglePlay(){
+  const v = $('#player-video');
+  v.paused ? v.play().catch(()=>{}) : v.pause();
+}
+
+(function initPlayerBar(){
+  const v = $('#player-video'), scrub = $('#vp-scrub');
+  const paint = () => {
+    const pct = v.duration ? (v.currentTime / v.duration) * 100 : 0;
+    $('#vp-fill').style.width = pct + '%';
+    $('#vp-knob').style.left = pct + '%';
+    $('#vp-cur').textContent = fmt(v.currentTime);
+    $('#vp-dur').textContent = fmt(v.duration);
+  };
+  v.addEventListener('timeupdate', paint);
+  v.addEventListener('loadedmetadata', paint);
+  v.addEventListener('play',  () => $('#vp-toggle').textContent = '❚❚');
+  v.addEventListener('pause', () => $('#vp-toggle').textContent = '▶');
+
+  const seekTo = e => {
+    const r = scrub.getBoundingClientRect();
+    if (v.duration) v.currentTime = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * v.duration;
+  };
+  let dragging = false, wasPlaying = false;
+  scrub.addEventListener('pointerdown', e => {
+    dragging = true; wasPlaying = !v.paused;      // 拖之前在播，拖完要接着播
+    scrub.setPointerCapture(e.pointerId); seekTo(e);
+  });
+  scrub.addEventListener('pointermove', e => { if (dragging) seekTo(e); });
+  scrub.addEventListener('pointerup', e => {
+    dragging = false; scrub.releasePointerCapture(e.pointerId);
+    if (wasPlaying) v.play().catch(() => {});
+  });
+
+  // 空格播放/暂停，左右方向键跳 5 秒
+  $('#player').addEventListener('keydown', e => {
+    if (e.key === ' ')          { e.preventDefault(); togglePlay(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); v.currentTime += 5; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); v.currentTime -= 5; }
+  });
+})();
+
+let playing = null;                       // {rid, name}
+function play(rid, name, which){
+  playing = {rid, name};
+  $('#player').showModal();
+  switchCam(which || 'runner');
+}
+function switchCam(which){
+  if(!playing) return;
+  $('#player-title').textContent =
+    `${playing.name} · ${which==='judge'?'裁判':'执行'}录屏`;
+  ['runner','judge'].forEach(k =>
+    $(`#sw-${k}`).style.borderColor = (k===which ? 'var(--accent)' : 'transparent'));
+  const v = $('#player-video');
+  // 必须等媒体就绪再 play：src 刚赋值就调，play() 会被随后的 load() 打断
+  // （AbortError），表现是弹层开了但画面停在第 0 帧。
+  v.oncanplay = () => {
+    v.oncanplay = null;
+    v.play().catch(() => {});
+  };
+  v.src = `/api/runs/${playing.rid}/video?which=${which}`;
+  v.load();
+}
+function closePlayer(){
+  const v = $('#player-video');
+  v.pause(); v.removeAttribute('src'); v.load();
+  $('#player').close();
+}
+$('#player').addEventListener('close', () => {
+  const v = $('#player-video'); v.pause(); v.removeAttribute('src'); v.load();
+});
+
+// ===== agent 卡住了，等人回答 =====
+let asking = null;
+
+async function openAsk(rid, name){
+  const r = await (await fetch(`/api/runs/${rid}`)).json();
+  asking = {rid, name, n:(r.questions || []).length};
+  $('#ask-title').textContent = `${name} · agent 有 ${asking.n} 个问题`;
+  $('#ask-status').textContent = '';
+  $('#ask-list').innerHTML = (r.questions || []).map((q, i) => `
+    <div class="ask">
+      <div class="q"><b>${i+1}.</b> ${esc(q)}</div>
+      <textarea id="ans-${i}" rows="2" placeholder="回答这一条…"></textarea>
+    </div>`).join('') || '<div class="empty">它没写清问什么</div>';
+  $('#ask').showModal();
+}
+
+async function submitAnswers(){
+  const answers = [...Array(asking.n)].map((_, i) => {
+    const q = $('#ask-list').children[i]?.querySelector('.q')?.textContent || '';
+    return `${q}\n我的回答：${$(`#ans-${i}`).value.trim()}`;
+  });
+  if(!answers.some(a => a.includes('我的回答：') && a.split('我的回答：')[1].trim())){
+    $('#ask-status').textContent = '至少回答一条'; return;
+  }
+  $('#ask-status').textContent = '接上了，正在继续…';
+  const r = await (await fetch(`/api/runs/${asking.rid}/answer`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({answers})})).json();
+
+  const es = new EventSource(`/api/runs/${r.events}/events`);
+  es.onmessage = ev => {
+    const {kind, payload} = JSON.parse(ev.data);
+    if(kind === 'step' || kind === 'judge_step')
+      $('#ask-status').textContent = `跑着… ${payload.n}. ${payload.tool}`;
+    if(kind === 'phase') $('#ask-status').textContent = payload;
+    if(kind === 'done'){ es.close(); $('#ask').close(); load(); }
+  };
+}
+
+// ===== 验收路线结构化编辑器 =====
+
+// ---- 路书 / 意图编辑器 -------------------------------------------------------
+// 结构化编辑只在后端确认「解析再渲染能逐字复原」时才开放；复原不了的路书按纯文本改，
+// 免得编辑器把它重排坏了（实测有 4 份真实路书的写法超出解析器理解范围）。
+let pb = {scenario:'', skill:'', data:null};
+const PB_FIELDS = [['ref','参考'],['goal','目的'],['anchor','锚点'],
+                   ['action','动作'],['done','到位标志'],['notes','其它行']];
+// 读模式里字段名旁边的人话标签，跟验收路线 `go: 裁判去哪看` 一个用法
+const PB_HUMAN = {ref:'翻哪个原子', goal:'要做到什么', anchor:'找什么元素',
+                  action:'怎么操作', done:'成了的样子', notes:'备注'};
+
+function pbTab(which){
+  document.querySelectorAll('#pbed .tabs button').forEach(b =>
+    b.classList.toggle('on', b.dataset.pbtab === which));
+  document.querySelectorAll('#pbed .pane').forEach(p => p.hidden = p.dataset.pbpane !== which);
+}
+
+let INTENT_SPEC = [];     // intent 书写标准，从后端取，前端不自己维护一份
+
+async function openPlaybook(name, skill, tab){
+  pb = {scenario:name, skill, data:null, intent:null};
+  $('#pb-title').textContent = `${name} · 任务要求`;
+  $('#pb-status').textContent = '读取中…';
+  $('#pb-playbook').innerHTML = $('#pb-intentbox').innerHTML = $('#pb-expectbox').innerHTML = '';
+  document.querySelector('#pbed').showModal();
+  pbTab(tab || 'intent');   // 默认落在 intent：人先看「要干什么」，再看怎么走
+  const q = q_(skill);
+  const [pbData, intent, expect, spec, cvars, cfg] = await Promise.all([
+    (await fetch(`/api/scenarios/${name}/playbook${q}`)).json(),
+    (await fetch(`/api/scenarios/${name}/intent${q}`)).json(),
+    (await fetch(`/api/scenarios/${name}/expect${q}`)).json(),
+    INTENT_SPEC.length ? INTENT_SPEC : (await fetch('/api/intent-spec')).json(),
+    (await fetch(`/api/scenarios/${name}/context${q}`)).json(),
+    (await fetch(`/api/skills/${encodeURIComponent(skill)}/config`)).json().catch(() => ({})),
+  ]);
+  pb.data = pbData; pb.intent = intent; INTENT_SPEC = spec; CTXVARS = cvars || null; SKILLCFG = cfg || {};
+  pbRender();
+  intentDocMount('pb-intentbox', {scenario:name, skill, doc:intent, mode:'read'});
+  expectDocMount('pb-expectbox', {scenario:name, skill, data:expect, mode:'read'});
+  $('#pb-status').textContent = '';
+}
+
+
+let pbEditing = null;      // 正在编辑哪一块：'pre' | 'tail' | 步骤下标
+let pbNew = null;          // 刚加出来、还没存过的那一步；取消编辑要把它撤掉
+
+function pbRender(){
+  const d = pb.data || {};
+  const box = $('#pb-playbook');
+  if(!d.exists){ box.innerHTML = '<div class="empty">这个场景还没有 playbook.md（探索型场景，跑一次就会生成）</div>'; return; }
+
+  if(!d.structured){
+    const raw = pbEditing === 'raw';
+    box.innerHTML = `${OWNER.playbook}
+      <div class="pb-raw">旧写法，没拆成步骤——只能按纯文本改。</div>
+      ${raw
+        ? `<textarea class="ed-in" id="pb-rawtext" style="min-height:56vh;font-family:var(--mono);font-size:12px"></textarea>
+           <div class="doc-foot"><button onclick="pbSave()">保存</button>
+             <button class="ghost" onclick="pbCancel()">取消</button></div>`
+        : `<div class="doc-bar"><span class="sp"></span>
+             <button class="ed-icon" onclick="pbEdit('raw')">✎ 按纯文本编辑</button></div>
+           ${renderPlaybookRaw({playbook: d.raw || ''})}`}`;
+    if(raw) $('#pb-rawtext').value = d.raw || '';
+    return;
+  }
+
+  box.innerHTML = `<div class="doc">${OWNER.playbook}
+    ${pbBlock('pre', '开头', '标题与约定', d.preamble)}
+    <div id="pb-steps"></div>
+    <button class="ed-add" onclick="pbAddStep()">＋ 步骤</button>
+    ${pbBlock('tail', '结尾', '观察与待勘', d.trailing)}</div>`;
+  pbStepsRender();
+}
+// 开头 / 结尾两块：跟验收路线的 goal 卡同一个样子——左边字段名 + 人话标签，右边正文
+function pbBlock(key, title, hint, text){
+  const editing = pbEditing === key;
+  if(editing) return `<div class="ex-goal"><div class="doc-field" style="margin:0"><label>${title}</label>
+      <textarea class="ed-in" id="pb-${key}" style="min-height:120px;font-family:var(--mono);font-size:12px">${esc(text||'')}</textarea></div>
+      <div class="doc-foot" style="margin-top:9px"><button onclick="pbSaveBlock('${key}')">保存</button>
+        <button class="ghost" onclick="pbCancel()">取消</button></div></div>`;
+  // 编辑按钮钉在右上角：开头那块常是好几段，浮动到正文末尾就掉到卡片底下去了
+  return `<div class="ex-goal" style="position:relative"><div class="ex-row" style="padding:0">
+      <span class="ex-k">${title}<small>${hint}</small></span>
+      <div style="padding-right:64px">${(text||'').trim() ? cfgInline(md(text)) : '<span style="color:var(--muted)">（空）</span>'}</div>
+    </div><span style="position:absolute;right:12px;top:10px"><button class="ed-icon" onclick="pbEdit('${key}')">✎ 编辑</button></span></div>`;
+}
+function pbStepsRender(){
+  // 每步一张卡：头部是圆形序号 + 这一步的【目的】（人扫路线时看的就是它），
+  // 正文是其余要素的「字段名 / 人话标签 | 值」两栏行——跟验收路线的 steps[i] 卡同一套语法。
+  // #pb-steps 的第 i 个子元素就是第 i 步、编辑态靠 data-step-field 取值，pbSaveStep 依赖这两条。
+  $('#pb-steps').innerHTML = (pb.data.steps || []).map((s, i) => {
+    const editing = pbEditing === i;
+    const n = pb.data.steps.length;
+    const ctl = `<button class="ed-x" onclick="pbMove(${i},-1)" ${i===0?'disabled':''}>↑</button>
+        <button class="ed-x" onclick="pbMove(${i},1)" ${i===n-1?'disabled':''}>↓</button>
+        <button class="ed-x" onclick="pbDelStep(${i})">删</button>`;
+    if(editing){
+      return `<div class="ex-edit-step">
+        <div class="ed-step-head"><span class="ex-no">${i+1}</span>
+          <span class="ed-lbl">五要素都要填；没有原子写 —</span><span class="sp"></span>${ctl}</div>
+        ${PB_FIELDS.map(([k,label]) => `
+          <div class="pb-f"><label>【${label}】</label>
+            <textarea class="ed-in" data-step-field="${k}" rows="${Math.max(1, String(s[k]||'').split('\n').length)}"
+              >${esc(s[k]||'')}</textarea></div>`).join('')}
+        <div class="doc-foot" style="margin-top:8px"><button onclick="pbSaveStep(${i})">保存</button>
+          <button class="ghost" onclick="pbCancel()">取消</button></div></div>`;
+    }
+    const cell = v => cfgInline(inline(String(v||'').replace(/\n[ \t]+/g, '\n')));
+    const rows = PB_FIELDS.filter(([k]) => k !== 'goal').map(([k,label]) => {
+      const v = String(s[k]||'').trim();
+      if(!v && k === 'notes') return '';                       // 没有备注就不占一行
+      return `<div class="ex-row pb"><span class="ex-k">【${label}】<small>${PB_HUMAN[k]}</small></span>
+        <div style="white-space:pre-wrap">${v ? cell(s[k]) : '<span style="color:var(--muted)">—</span>'}</div></div>`;
+    }).join('');
+    const title = String(s.goal||'').trim();
+    return `<div class="ex-step">
+      <header><span class="ex-no">${i+1}</span>${title ? `<b>${inline(title)}</b>` : `<span>${i+1}.</span>`}
+        <span class="sp"></span>${ctl}<button class="ed-icon" onclick="pbEdit(${i})">✎ 编辑</button></header>
+      ${rows}</div>`;
+  }).join('');
+}
+
+function pbEdit(which){ pbEditing = which; pbRender(); }
+function pbCancel(){
+  // 新加的步骤五要素还是空的，存不进去（save_playbook 会拦），取消就直接撤掉
+  if(pbNew !== null){ pb.data.steps = pb.data.steps.filter((_, k) => k !== pbNew); pbNew = null; }
+  pbEditing = null; pbRender();
+}
+
+// 增删移都是结构改动，没有要填的字段，点完直接落盘
+function pbAddStep(){
+  pb.data.steps = [...pb.data.steps, {ref:'', goal:'', anchor:'', action:'', done:'', notes:''}];
+  pbNew = pb.data.steps.length - 1;
+  pbEdit(pbNew);
+}
+async function pbMove(i, d){
+  const steps = pb.data.steps.slice(), j = i + d;
+  if(j < 0 || j >= steps.length) return;
+  [steps[i], steps[j]] = [steps[j], steps[i]];
+  await pbPut({preamble: pb.data.preamble, steps, trailing: pb.data.trailing});
+}
+async function pbDelStep(i){
+  if(!confirm(`删掉第 ${i+1} 步？这会直接写进 playbook.md。`)) return;
+  const steps = pb.data.steps.filter((_, k) => k !== i);
+  await pbPut({preamble: pb.data.preamble, steps, trailing: pb.data.trailing});
+}
+
+async function pbSaveBlock(key){
+  const el = $(`#pb-${key}`); if(!el) return;
+  const patch = key === 'pre' ? {preamble: el.value} : {trailing: el.value};
+  await pbPut({preamble: pb.data.preamble, steps: pb.data.steps, trailing: pb.data.trailing, ...patch});
+}
+
+async function pbSaveStep(i){
+  const box = $('#pb-steps').children[i];
+  const step = {...pb.data.steps[i]};
+  box.querySelectorAll('[data-step-field]').forEach(t => step[t.dataset.stepField] = t.value);
+  const steps = pb.data.steps.map((s, k) => k === i ? step : s);
+  await pbPut({preamble: pb.data.preamble, steps, trailing: pb.data.trailing});
+}
+
+async function pbPut(body){
+  const st = $('#pb-status'); st.textContent = '保存中…';
+  try{
+    const res = await fetch(`/api/scenarios/${pb.scenario}/playbook`,
+      {method:'PUT', headers:{'Content-Type':'application/json'},
+       body: JSON.stringify({skill: pb.skill, ...body})});
+    if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    pb.data = await (await fetch(`/api/scenarios/${pb.scenario}/playbook${q_(pb.skill)}`)).json();
+    pbEditing = null; pbNew = null; pbRender();
+    st.textContent = '已保存';
+    load();
+  }catch(e){ st.textContent = '保存失败：' + e.message; }
+}
+
+async function pbSave(){
+  // 只给「解析不了、按纯文本改」那条路用；结构化的走 pbSaveBlock / pbSaveStep 单块存
+  const raw = $('#pb-rawtext'); if(!raw) return;
+  const st = $('#pb-status'); st.textContent = '保存中…';
+  try{
+    const res = await fetch(`/api/scenarios/${pb.scenario}/playbook`,
+      {method:'PUT', headers:{'Content-Type':'application/json'},
+       body: JSON.stringify({skill: pb.skill, raw: raw.value})});
+    if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    st.textContent = '已保存'; load();
+  }catch(e){ st.textContent = '保存失败：' + e.message; }
+}
+
+
+const MARK = {pass:'✓', fail:'✕', blocked:'!'};
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// judgment.yaml —— 裁判的答卷，只读。缩进照真实 yaml 层级来
+const tok = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n||0);
+const secs = ms => ms >= 1000 ? (ms/1000).toFixed(1)+'s' : (ms||0)+'ms';
+
+// 一次跑批的用量小结
+function renderUsage(calls){
+  calls = calls || [];
+  if(!calls.length) return '<div class="empty">这次跑批没有调用记录（旧数据没有这份日志）</div>';
+  const sum = (k, f) => calls.filter(f).reduce((a,c)=>a+(c[k]||0), 0);
+  const line = (name, f) => {
+    const n = calls.filter(f).length;
+    if(!n) return '';
+    const p = sum('prompt_tokens',f), read = sum('cache_read_tokens',f), write = sum('cache_write_tokens',f);
+    // 缓存读取按 0.1×、写入按 1.25× 计。换算成「等效原价 token」才看得出真花了多少
+    const eff = Math.round((p - read - write) + read * 0.1 + write * 1.25);
+    const saved = p ? Math.round((1 - eff / p) * 100) : 0;
+    const cache = read || write
+      ? ` · <b>缓存命中 ${tok(read)}，等效 ${tok(eff)}（省 ${saved}%）</b>`
+      : ' · 未命中缓存';
+    return `<div class="calls-total">${name}：${n} 次调用 · prompt ${tok(p)}
+      · 补全 ${tok(sum('completion_tokens',f))} · 耗时 ${secs(sum('latency_ms',f))}${cache}</div>`;
+  };
+  return line('执行', c=>!c.judge) + line('裁判', c=>!!c.judge) +
+         `<div class="calls-total" style="opacity:.7">模型 ${esc(calls[0].model)}</div>`;
+}
+
+// 工具类别（改页面 / 看页面 / 资产·脚本 / 收尾）由后端从注册表算，这里只管取回来上色。
+// 前端不自己维护一份工具名单——两边一定会漂。
+let TOOL_KIND = {};
+const KIND_LABEL = {act:'改页面', look:'看页面', asset:'资产', end:'收尾', skip:'跳过'};
+
+async function loadToolKinds(){
+  try{ TOOL_KIND = await (await fetch('/api/tools')).json(); }catch(e){ TOOL_KIND = {}; }
+}
+
+function kindOf(step){
+  if((step.result_preview||'').startsWith('已跳过')) return 'skip';
+  return TOOL_KIND[step.tool] || 'look';
+}
+
+const legend = `<div class="tl-legend">
+  <span><i style="background:var(--act)"></i>改页面</span>
+  <span><i style="background:var(--look);opacity:.5"></i>看页面</span>
+  <span><i style="background:var(--asset)"></i>读资产 / 跑脚本</span>
+  <span><i style="background:var(--pass)"></i>收尾</span>
+  <span><i style="background:var(--block)"></i>被跳过</span>
+</div>`;
+
+// 轨迹：按「第几次调模型」把步骤分组——一次调用可能产出好几步，
+// 这才是模型真正的一个回合：它想了什么 → 决定调哪些工具 → 每个工具返回了什么。
+function renderTrace(steps, calls, isJudge){
+  steps = steps || [];
+  if(!steps.length) return '<div class="empty">没有步骤</div>';
+  // Step.llm_seq 是每个 loop 自己的计数（执行、裁判各从 1 开始），
+  // 而 llm_calls.seq 是整次跑批的全局计数，所以按角色过滤后用下标对齐。
+  const mine = (calls||[]).filter(c => !!c.judge === isJudge);
+
+  const turns = [];
+  let cur = null;
+  for(const s of steps){
+    const seq = s.llm_seq || 0;
+    if(!cur || !seq || cur.seq !== seq){   // 旧数据没有 llm_seq，一步一组，别把各自的思考混掉
+      cur = {seq, call: seq ? mine[seq-1] : null, steps: []};
+      turns.push(cur);
+    }
+    cur.steps.push(s);
+  }
+
+  return legend + `<div class="tl">${turns.map(t => {
+    const c = t.call;
+    const head = t.seq
+      ? `<div class="tl-head"><b>第 ${t.seq} 次调模型</b>
+           ${c ? `<span>${tok(c.prompt_tokens)} → ${tok(c.completion_tokens)} tok</span>
+                  <span class="sp">${secs(c.latency_ms)}</span>` : '<span class="sp"></span>'}
+         </div>`
+      : '';                                   // 旧数据没有 llm_seq，就不显示回合头
+    const think = (t.steps[0]||{}).thinking || '';
+    return `<div class="tl-turn">
+      ${head}
+      ${think ? `<div class="tl-think">${esc(think)}</div>` : ''}
+      ${t.steps.map(s => renderTraceStep(s)).join('')}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderTraceStep(s){
+  const args = JSON.stringify(s.args || {});
+  const k = kindOf(s);
+  return `<details class="tl-step k-${k}">
+    <summary>
+      <span class="bar"></span>
+      <span class="n">${s.n}</span>
+      <span class="kind">${KIND_LABEL[k]||''}</span>
+      <span class="t">${esc(s.tool)}</span>
+      <span class="a">${esc(args.slice(0, 140))}</span>
+      <span class="ms">${s.elapsed_ms ? secs(s.elapsed_ms) : ''}</span>
+    </summary>
+    <div class="tl-body">
+      <div><div class="tl-lbl">入参</div><pre>${esc(JSON.stringify(s.args||{}, null, 2))}</pre></div>
+      <div><div class="tl-lbl">返回（存档截断到 ${(s.result_preview||'').length} 字）</div>
+           <pre>${esc(s.result_preview || '（空）')}</pre></div>
+    </div>
+  </details>`;
+}
+
+function renderJudgment(j, expect){
+  if(!j || !j.steps || !j.steps.length) return '<div class="empty">这次没有判定结果</div>';
+  const normalize = value => value === 'pass' ? 'pass' : value === 'fail' ? 'fail' : 'blocked';
+  const stepStatus = step => {
+    const results = (step.check || []).map(c => normalize(c.result));
+    if(results.includes('fail')) return 'fail';
+    if(step.reached === false || results.includes('blocked') || !results.length) return 'blocked';
+    return 'pass';
+  };
+  const meta = {
+    pass: {label:'通过', sentence:'这一步全部通过'},
+    fail: {label:'失败', sentence:'这一步有检查未通过'},
+    blocked: {label:'卡住', sentence:'这一步无法完成判断'},
+  };
+  const expectedSteps = (expect || {}).steps || [];
+  // 早期 judgment 只存 step 编号；标题和要求从同次跑批冻结的 expect 快照补齐。
+  const steps = j.steps.map((raw, index) => {
+    const expected = expectedSteps[index] || {};
+    const checks = (raw.check || []).map((check, ci) => ({
+      ...check, fact:check.fact || (expected.check || [])[ci] || '',
+    }));
+    const step = {...raw, go:raw.go || expected.go || '', check:checks};
+    return {step, index, status:stepStatus(step)};
+  });
+  const count = status => steps.filter(item => item.status === status).length;
+  const statusBadge = status => `<span class="jg-status"><span class="icon">${MARK[status]}</span>${meta[status].label}</span>`;
+
+  return `<div class="jg">
+    <div class="jg-overview">
+      <div class="jg-overview-main">
+        <div class="jg-overview-title">裁判逐步验收结果</div>
+        <div class="jg-totals">
+          <span class="jg-total"><b>${steps.length}</b> 个步骤</span>
+          <span class="jg-total pass"><b>${count('pass')}</b> 通过</span>
+          <span class="jg-total fail"><b>${count('fail')}</b> 失败</span>
+          <span class="jg-total blocked"><b>${count('blocked')}</b> 卡住</span>
+        </div>
+      </div>
+      <div class="jg-nav">${steps.map(({index,status}) =>
+        `<a class="${status}" href="#judge-step-${index+1}">步骤 ${index+1} · ${meta[status].label}</a>`).join('')}
+      </div>
+    </div>
+
+    ${steps.map(({step:s,index:i,status}) => `
+      <section class="jg-step ${status}" id="judge-step-${i+1}">
+        <header>
+          <span class="jg-no">${i+1}</span>
+          <div class="jg-step-title"><small>${meta[status].sentence}</small>${inline(s.go||'（未记录这一步要做什么）')}</div>
+          ${statusBadge(status)}
+        </header>
+        <div class="jg-body">
+          <div class="jg-route">
+            <span class="k">是否到达目标页</span>
+            <span class="reached ${s.reached === false ? 'no' : ''}">${s.reached === false ? '没有到达' : '已到达'}</span>
+            <span class="k">裁判怎么到的</span>
+            <span>${s.how ? inline(s.how) : '（未记录到达过程）'}</span>
+          </div>
+          <div class="jg-checks">
+            ${(s.check||[]).map((c, ci) => {
+              const result = normalize(c.result);
+              return `<article class="jg-check ${result}">
+                <div class="jg-check-head">
+                  <b>检查 ${i+1}.${ci+1}</b><span class="sp"></span>${statusBadge(result)}
+                </div>
+                <div class="jg-row expected">
+                  <span class="k">要检查什么</span><div class="jg-value">${inline(c.fact||'（未记录检查要求）')}</div>
+                </div>
+                <div class="jg-row actual">
+                  <span class="k">实际证据</span><div class="jg-value">${c.evidence ? esc(String(c.evidence).trim()) : '（没有记录证据）'}</div>
+                </div>
+                ${c.note ? `<div class="jg-reason"><span class="k">${result === 'pass' ? '补充说明' : '未通过原因'}</span>
+                  <div>${inline(c.note)}</div></div>` : ''}
+              </article>`;
+            }).join('') || '<div class="empty">这一步没有检查项</div>'}
+          </div>
+        </div>
+      </section>`).join('')}
+  </div>`;
+}
+
+// 导出 HTML 里的 playbook.md：逐行保留排版（【锚点】【动作】这套标记本身就是结构），
+// 但行内 markdown 要渲染——不然 `preset=desktop` 的反引号和 **强调** 的星号会直接露出来。
+function renderPlaybookRaw(t){
+  t = t || {};
+  if(!t.playbook) return '<div class="empty">没有 playbook.md —— 这是探索型场景，路线由 agent 自己摸</div>';
+  // 【锚点】【动作】这套标记是路书自己的结构，渲染完再挑出来上色（它们不会出现在标签里）
+  return md(t.playbook, {breaks: true}).replace(/【(.*?)】/g, '<span class="mark">【$1】</span>');
+}
+
+// ---- 轻量 markdown：只做 intent 里真实用到的那几样，先转义再排版，永远不注入原文 ----
+const CJK_END = /[　-鿿＀-￯、。，；：！？）」』】…—]$/;
+const CJK_START = /^[　-鿿＀-￯（「『【]/;
+function joinLines(arr){
+  // 中文硬换行拼回去不加空格，中英混排才加空格
+  return arr.reduce((acc, ln) => !acc ? ln
+    : acc + ((CJK_END.test(acc) || CJK_START.test(ln)) ? '' : ' ') + ln, '');
+}
+// 模板字符串里为了源码好读而换的行，浏览器会塌成一个空格——中文句子中间于是多一个洞
+// （实测：「或步骤写法跟 五要素不一致」）。按 joinLines 同一套规则收掉：中文接中文不留空格。
+const CJK_PUNCT = /[、。，；：！？）」』】…—]/;
+function tidy(s){
+  return String(s).replace(/\n\s*/g, (m, i) => {
+    // 标签不算「字」：`标准，</span>\n<b>agent` 两边该看的是 `，` 和 `a`
+    const before = s.slice(0, i).replace(/<[^>]*>\s*$/, '').slice(-1);
+    const after = s.slice(i + m.length).replace(/^<[^>]*>/, '').slice(0, 1);
+    // 中文标点后面本来就不该有空格；中文接中文也不要。中英之间的那个空格要留着。
+    if(CJK_PUNCT.test(before)) return '';
+    return (CJK_END.test(before) && CJK_START.test(after)) ? '' : ' ';
+  });
+}
+function inline(t){
+  let x = esc(t);
+  const codes = [];
+  x = x.replace(/`([^`]+)`/g, (_, c) => { codes.push(`<code>${c}</code>`); return `%%C${codes.length-1}%%`; });
+  x = x.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+        (_, txt, url) => `<a href="${url.replace(/"/g,'%22')}" target="_blank" rel="noopener">${txt}</a>`);
+  return x.replace(/%%C(\d+)%%/g, (_, k) => codes[k]);
+}
+function mdTable(rows){
+  const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim()));
+  const head = cells(rows[0]);
+  const body = rows.slice(2).map(cells);
+  return `<table><thead><tr>${head.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${body.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function md(src, opt){
+  const brk = !!(opt && opt.breaks);          // 硬换行：每行单独成行，不按 markdown 并段
+  const knit = arr => brk ? arr.map(inline).join('<br>') : inline(joinLines(arr));
+  const lines = String(src||'').replace(/\r/g,'').split('\n');
+  const out = []; const para = []; let i = 0;
+  const flush = () => { if(para.length){ out.push(`<p>${knit(para)}</p>`); para.length = 0; } };
+  const LI = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+  while(i < lines.length){
+    const ln = lines[i];
+    if(/^\s*```/.test(ln)){
+      flush(); const buf = []; i++;
+      while(i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
+      i++; out.push(`<pre class="md-code"><code>${esc(buf.join('\n'))}</code></pre>`); continue;
+    }
+    if(/^\s*\|/.test(ln) && i+1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i+1])){
+      flush(); const rows = [];
+      while(i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
+      out.push(mdTable(rows)); continue;
+    }
+    const hm = ln.match(/^(#{1,6}) (.*)$/);
+    // 层级要带出去。以前 hm[1] 捕了就扔，`#` 标题和 `###` 标题渲染成同一个样子——
+    // 路书正文里「文档标题」和「某一节」于是长得一模一样，看不出结构。
+    if(hm){ flush(); out.push(`<div class="md-h md-h${hm[1].length}">${inline(hm[2])}</div>`); i++; continue; }
+    if(/^\s*> ?/.test(ln)){
+      flush(); const buf = [];
+      while(i < lines.length && /^\s*> ?/.test(lines[i])) buf.push(lines[i++].replace(/^\s*> ?/, ''));
+      out.push(`<blockquote>${knit(buf.filter(Boolean))}</blockquote>`); continue;
+    }
+    const lm = ln.match(LI);
+    if(lm){
+      flush(); const ordered = /\d/.test(lm[2]); const items = [];
+      while(i < lines.length){
+        const m2 = lines[i].match(LI);
+        if(m2){ items.push([m2[3]]); i++; }                       // 一条 li 存成它的行，最后再 knit
+        else if(items.length && /^\s{2,}\S/.test(lines[i])){ items[items.length-1].push(lines[i].trim()); i++; }
+        else break;
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      out.push(`<${tag}>${items.map(t=>`<li>${knit(t)}</li>`).join('')}</${tag}>`); continue;
+    }
+    if(!ln.trim()){ flush(); i++; continue; }
+    para.push(ln.trim()); i++;
+  }
+  flush();
+  return `<div class="md">${out.join('')}</div>`;
+}
+
+// ---- 文档组件：读模式漂亮、点「编辑」就地变表单。三个页签共用同一套 ----
+const DOCS = {};                 // mountId → 状态
+
+// 谁维护哪份，照 SKILL.md 的归属表来。这个区分是实打实的：
+// 人改了 playbook，下次探索到失配 agent 会整篇重写，改动留不住；
+// 反过来 agent 永远不碰 intent / expect，那两份人说了算。
+const OWNER = {
+  playbook: `<div class="owner bot"><b>机器维护</b><span>跑通后自己记的路线，界面变了会重写。长期约束写进「要验什么」。</span></div>`,
+  intent: `<div class="owner human"><b>人工维护</b><span>写要求，不写步骤。</span><em>默认只读，点 ✎ 编辑</em></div>`,
+  expect: `<div class="owner human"><b>人工维护</b><span>验收标准，裁判照它取证。</span><em>默认只读，点 ✎ 编辑</em></div>`,
+};
+async function loadIntentSpec(){
+  if(!INTENT_SPEC.length){ try{ INTENT_SPEC = await (await fetch('/api/intent-spec')).json(); }catch(e){} }
+}
+const q_ = skill => skill ? `?skill=${encodeURIComponent(skill)}` : '';
+
+// -- intent ------------------------------------------------------------------
+// 维护场景的人最想先看到的不是「什么时候跑」，是「这条流程到底做了哪几步」。
+// 路书每一步的【目的】连起来就是这个故事——只读，点哪一步就跳到「机器怎么走」那一步。
+function flowStripHtml(scenario){
+  if(!pb || pb.scenario !== scenario || !pb.data) return '';
+  const d = pb.data;
+  let body;
+  if(!d.exists) body = '<span style="color:var(--muted)">还没跑过，跑通后这里出现流程。</span>';
+  else if(!d.structured) body = `<span style="color:var(--muted)">旧写法，没拆成步骤。</span>`;
+  else {
+    const steps = d.steps || [];
+    body = `<ol class="flow">${steps.map((s, i) => `<li><span class="flowstep" title="${esc(String(s.done||'').trim() ? '成了的样子：' + String(s.done).trim() : '')}">
+        <b>${i+1}</b>${inline(String(s.goal||'').trim() || `第 ${i+1} 步`)}</span></li>`).join('')}</ol>
+      <div class="hint" style="margin-top:6px">${steps.length} 步 · 机器跑通后记的，只读</div>`;
+  }
+  return `<div class="ex-goal"><div class="ex-row" style="padding:0">
+    <span class="ex-k">流程<small>分哪几步</small></span><div>${body}</div></div></div>`;
+}
+
+function intentReadHtml(doc, {id='', archived, editable=true} = {}){
+  if(!doc || !doc.exists) return '<div class="empty">这个场景还没有 intent.md</div>';
+  const meta = doc.meta || {};
+  const st = DOCS[id] || {};
+  const editing = st.editing;            // 正在编辑哪一节：'meta' 或小节 key
+  const note = archived === true ? '这是这次跑批时的存档。'
+             : archived === false ? '这是场景目录里的<b>当前版本</b>（这次跑批早于「开跑存档」）。' : '';
+  const pen = key => editable
+    ? `<button class="ed-icon" onclick="intentDocEdit('${id}','${key}')">✎ 编辑</button>` : '';
+  const foot = key => `<div class="doc-foot" style="margin-top:9px">
+      <button onclick="intentDocSaveSection('${id}','${key}')">保存</button>
+      <button class="ghost" onclick="intentDocCancel('${id}')">取消</button></div>`;
+
+  if(!doc.conforms){
+    const miss = (doc.missing||[]).map(k => (INTENT_SPEC.find(x=>x.key===k)||{}).heading).filter(Boolean);
+    const extra = (doc.extra||[]).map(b => b.heading);
+    const raw = st.editing === 'raw';
+    return `<div class="doc">
+      <div class="doc-bar"><span>${note}</span><span class="sp"></span>
+        ${raw || !editable ? '' : `<button class="ed-icon" onclick="intentDocEdit('${id}','raw')">✎ 按纯文本编辑</button>`}</div>
+      <div class="pb-raw">这份 intent 写在书写标准落地之前，套不进卡片。<br/>
+        ${miss.length?`缺必填小节：<b>${miss.map(esc).join('、')}</b><br/>`:''}
+        ${extra.length?`标题对不上规范：<b>${extra.map(esc).join('、')}</b><br/>`:''}
+        改成规范骨架之后，这里就会变成一节一节的卡片。规范全文在 <code>references/intent-spec.md</code>。</div>
+      ${raw ? `<textarea class="ed-in" data-raw style="min-height:52vh;font-family:var(--mono);font-size:12px">${esc(doc.raw||'')}</textarea>${foot('raw')}`
+            : md(doc.raw||'')}</div>`;
+  }
+
+  const envs = Array.isArray(meta.envs) ? meta.envs : [];
+  // frontmatter 就是 yaml，按验收路线 goal 卡的写法：左边 `name:` 这种原键 + 人话标签，右边值
+  const row = (k, hint, body) => `<div class="ex-row"><span class="ex-k">${k}<small>${hint}</small></span><div>${body}</div></div>`;
+  const hero = editing === 'meta'
+    ? `<div class="ex-goal">
+        <div class="doc-field"><label>name</label><textarea class="ed-in" rows="1" data-meta="name">${esc(meta.name||'')}</textarea></div>
+        <div class="doc-field"><label>description</label><div>
+          <textarea class="ed-in" rows="3" data-meta="description" oninput="intentDocCount('${id}')">${esc(meta.description||'')}</textarea>
+          <div class="hint" data-count></div></div></div>
+        <div class="doc-field"><label>envs</label><div>
+          <textarea class="ed-in" rows="1" data-meta="envs">${esc(envs.join(', '))}</textarea>
+          <div class="hint">支持哪些环境，逗号分隔。留空＝只能跑 dev；要跑 prod 必须写出来</div></div></div>
+        <div class="doc-field"><label>标题</label><textarea class="ed-in" rows="1" data-title>${esc(doc.title||'')}</textarea></div>
+        ${foot('meta')}</div>`
+    : `<div class="ex-goal" style="padding:0;position:relative">
+        ${editable ? `<span style="position:absolute;right:12px;top:9px">${pen('meta')}</span>` : ''}
+        ${row('#', '标题', `<b>${inline(doc.title || meta.name || '')}</b>`)}
+        ${row('name:', '场景名', `<code>${esc(meta.name||'')}</code>`)}
+        ${row('description:', '一句话说明', inline(meta.description||''))}
+        ${row('envs:', '能跑哪些环境', envs.map(e=>`<span class="chip env">${esc(e)}</span>`).join(' ') || '<span class="chip">只跑 dev</span>')}
+      </div>`;
+
+  // 每一节一张卡。九节分两层：产品经理真要写的四节摆在上面；环境、造数、清理这些技术项
+  // 折进「技术细节」——建场景时 agent 照现有配置自动填，人通常不用碰，看到也看不懂。
+  const PM_KEYS = ['goal', 'params', 'redlines'];
+  const secCard = sp => {
+    const text = (doc.sections||{})[sp.key] || '';
+    const on = editing === sp.key;
+    if(!text.trim() && !on && !editable) return '';
+    const primary = sp.key === 'goal';
+    return `<section class="ex-step${primary ? ' primary' : ''}">
+      <header><span class="ex-k" style="font-size:12.5px" title="${esc(sp.hint)}">${esc(sp.heading)}</span>
+        ${primary ? '<span class="tag req">主要改这里</span><span class="ex-lead">要证明哪个业务结果成立，用人话</span>'
+                  : `<span class="tag ${sp.required?'req':''}">${sp.required?'必填':'可选'}</span>`}
+        <span class="sp"></span>${on ? '' : pen(sp.key)}</header>
+      <div class="ex-body">${on
+        ? `<div class="hint" style="margin-bottom:7px;white-space:pre-wrap">${esc(sp.hint)}</div>
+           <textarea class="ed-in" data-sec="${sp.key}" rows="5" placeholder="例：\n${esc(sp.example)}">${esc(text)}</textarea>${foot(sp.key)}`
+        : (text.trim() ? cfgInline(md(text))
+                       : `<div class="sec-empty"><div>${md(sp.hint)}</div>
+                          <div class="eg"><span>例</span>${md(sp.example)}</div>
+                          </div>`)}</div>
+    </section>`;
+  };
+  const pmSecs = flowStripHtml(st.scenario) + INTENT_SPEC.filter(sp => PM_KEYS.includes(sp.key)).map(secCard).join('');
+  const techSpecs = INTENT_SPEC.filter(sp => !PM_KEYS.includes(sp.key));
+  const techFilled = techSpecs.filter(sp => ((doc.sections||{})[sp.key] || '').trim()).length;
+  const techOpen = techSpecs.some(sp => editing === sp.key);      // 正在改里面某一节就别折着
+  const secs = pmSecs + (techSpecs.length ? `<details class="techgroup" ${techOpen ? 'open' : ''}>
+    <summary><b>技术细节</b><span>已填 ${techFilled}/${techSpecs.length}</span><em>机器自动填，一般不用动</em></summary>
+    <div class="techbody">
+      ${cfgTableHtml() ? `<div class="ex-goal" style="padding:10px 14px"><div class="ex-row" style="padding:0">
+          <span class="ex-k">环境<small>与账号</small></span><div>${cfgTableHtml()}</div></div></div>` : ''}
+      ${techSpecs.map(secCard).join('')}
+    </div></details>` : '');
+
+  return `<div class="doc">
+    ${editable ? OWNER.intent : ''}
+    ${note ? `<div class="doc-bar"><span>${note}</span></div>` : ''}
+    ${hero}${secs}</div>`;
+}
+
+function intentDocMount(id, {scenario, skill, doc, archived, mode='read'}){
+  const el = document.getElementById(id); if(!el) return;
+  DOCS[id] = {kind:'intent', scenario, skill, doc, archived, editing:null};
+  intentDocRender(id);
+}
+function intentDocRender(id){
+  const st = DOCS[id]; const el = document.getElementById(id); if(!st || !el) return;
+  el.innerHTML = intentReadHtml(st.doc, {id, archived:st.archived, editable:true});
+  if(st.editing === 'meta') intentDocCount(id);
+}
+function intentDocEdit(id, key){
+  const st = DOCS[id]; if(!st) return;
+  st.editing = key; intentDocRender(id);
+}
+function intentDocCancel(id){ const st = DOCS[id]; if(!st) return; st.editing = null; intentDocRender(id); }
+function intentDocCount(id){
+  const el = document.getElementById(id); if(!el) return;
+  const ta = el.querySelector('[data-meta=description]'), out = el.querySelector('[data-count]');
+  if(!ta || !out) return;
+  const n = ta.value.trim().length, ok = n >= 25 && n <= 120;
+  out.textContent = `${n} 字 ${ok ? '✓' : '（要 25~120 字的一句完整话：被测什么、做什么、验什么）'}`;
+  out.className = 'hint ' + (ok ? 'ok' : 'bad');
+}
+
+// 只改了一节，但落盘是整份 PUT——其它节用原值带上，后端不用为单节改动开新接口
+async function intentDocSaveSection(id, key){
+  const st = DOCS[id]; const el = document.getElementById(id); if(!st || !el) return;
+  const doc = st.doc || {};
+  const v = sel => (el.querySelector(sel)||{}).value ?? '';
+  let body;
+  if(key === 'raw'){
+    body = {skill: st.skill, raw: v('[data-raw]')};
+  }else{
+    const meta = {...(doc.meta||{})};
+    if(key === 'meta'){
+      meta.name = v('[data-meta=name]').trim();
+      meta.description = v('[data-meta=description]').trim();
+      const envs = v('[data-meta=envs]').split(',').map(x=>x.trim()).filter(Boolean);
+      if(envs.length) meta.envs = envs; else delete meta.envs;
+    }
+    const sections = {...(doc.sections||{})};
+    if(key !== 'meta') sections[key] = v(`[data-sec=${key}]`);
+    body = {skill: st.skill, meta, extra: doc.extra || [],
+            title: key === 'meta' ? v('[data-title]').trim() : (doc.title||''),
+            sections};
+  }
+  const status = $('#pb-status');
+  if(status) status.textContent = '保存中…';
+  try{
+    const res = await fetch(`/api/scenarios/${st.scenario}/intent`,
+      {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    st.doc = await (await fetch(`/api/scenarios/${st.scenario}/intent${q_(st.skill)}`)).json();
+    st.archived = undefined;
+    st.editing = null; intentDocRender(id);
+    if(status) status.textContent = '已保存';
+    load();
+  }catch(e){ if(status) status.textContent = '保存失败：' + e.message; }
+}
+
+// -- expect --------------------------------------------------------------------
+// 验收路线里的 `context.xxx` 是「跑完才知道」的值：runner 交出来、落进本次 context.yaml、
+// 裁判照着取证。人在看板上只看得到变量名，所以这里补两样——正文里就地贴上次的取值，
+// 顶上给一张总表。改不了是对的（改了就成了「按 runner 的说法判 runner」），
+// 真正能人为决定的是**跑哪个环境**，那个在卡片上的运行按钮里选。
+let CTXVARS = null;
+let SKILLCFG = {};      // 技能的 config/env.json，给下面的 cfgInline 解释引用用
+async function loadSkillCfg(skill){
+  try{ SKILLCFG = await (await fetch(`/api/skills/${encodeURIComponent(skill || 'roadbook')}/config`)).json(); }
+  catch(e){ SKILLCFG = {}; }
+  return SKILLCFG;
+}
+
+// intent / 路书里满是 `environments.dev.researcher_web`、`<researcher_web>` 这种指向配置的引用。
+// 产品经理不知道它代表啥、新场景也不知道该写啥——跟 context.xxx 一样的盲点，同一个解法：
+// 名字原样留着，hover 显示实际值。`<env>` 占位就把每个环境的值都列出来。
+function cfgDig(obj, parts){ for(const k of parts){ if(obj == null || typeof obj !== 'object') return undefined; obj = obj[k]; } return obj; }
+function cfgFmt(v){ return (typeof v === 'object') ? JSON.stringify(v) : String(v); }
+function cfgResolve(path, suffix = ''){
+  const cfg = SKILLCFG || {}; const parts = path.split('.');
+  if(parts[0] === 'environments' && parts.length > 2 && parts[1] === '<env>'){
+    const rows = Object.keys(cfg.environments || {})
+      .map(e => [e, cfgDig(cfg, ['environments', e, ...parts.slice(2)])]).filter(([, v]) => v !== undefined && typeof v !== 'object');
+    return rows.length ? rows.map(([e, v]) => `${e}: ${cfgFmt(v)}${suffix}`).join('　·　') : null;
+  }
+  const v = cfgDig(cfg, parts);
+  if(v === undefined || v === null) return null;
+  if(typeof v === 'object') return null;                       // 一整组值没法一行显示，不解释
+  return cfgFmt(v) + suffix;
+}
+// 光秃秃的 `researcher_web`：环境分组里有这个键就按环境分别列，别只给顶层那份默认值——
+// 顶层是「当前默认环境」的拷贝，选了 prod 跑时它就是错的
+function cfgPerEnv(key){
+  return Object.values(SKILLCFG.environments || {}).some(e => e && typeof e === 'object' && key in e);
+}
+// 「产品经理写场景时不知道有哪些账号」——把 config/env.json 的 environments 摊成一张表。
+// 键名旁边有 `<键>_note` 就当解释挂到 hover 上（配置文件里本来就是这么写注释的）。
+function cfgTableHtml(){
+  const cfg = SKILLCFG || {}; const envs = cfg.environments || {}; const names = Object.keys(envs);
+  if(!names.length) return '';
+  const keys = [...new Set(names.flatMap(n => Object.keys(envs[n] || {})))].filter(k => k !== 'note' && !k.endsWith('_note'));
+  const fmt = v => v === undefined ? '<span style="color:var(--muted)">—</span>'
+                 : typeof v === 'object' ? `<code title="${esc(JSON.stringify(v))}">${esc(JSON.stringify(v)).slice(0, 48)}${JSON.stringify(v).length > 48 ? '…' : ''}</code>`
+                 : `<code>${esc(String(v))}</code>`;
+  const note = (n, k) => (envs[n] || {})[k + '_note'] || cfg[k + '_note'] || '';
+  const rows = keys.map(k => `<tr><td class="k" title="${esc(note(names[0], k))}">${esc(k)}</td>${
+      names.map(n => `<td title="${esc(note(n, k))}">${fmt(envs[n][k])}</td>`).join('')}</tr>`).join('');
+  // 环境之外的通用项（比如受访者端域名）也列上，不然人找不到
+  const common = Object.keys(cfg).filter(k => k !== 'environments' && k !== 'env' && !k.endsWith('_note')
+                                             && typeof cfg[k] !== 'object' && !keys.includes(k));
+  const commonRows = common.map(k => `<tr><td class="k" title="${esc(cfg[k + '_note'] || '')}">${esc(k)}</td>
+      <td colspan="${names.length}">${fmt(cfg[k])}</td></tr>`).join('');
+  return `<div class="cfgtab">
+    <table><thead><tr><th>配置项</th>${names.map(n => `<th>${esc(n)}${n === cfg.env ? ' <small>默认</small>' : ''}</th>`).join('')}</tr></thead>
+    <tbody>${rows}${commonRows}</tbody></table>
+    <div class="hint">来自 <code>config/env.json</code>，所有场景共用；场景里用 <code>environments.&lt;env&gt;.键名</code> 引用。</div></div>`;
+}
+function cfgInline(html){
+  if(!SKILLCFG || !Object.keys(SKILLCFG).length) return html;
+  // `<researcher_web>` 这种尖括号占位（路书常用）= 当前环境的同名键，按 environments.<env>.xxx 解
+  return html.replace(/<code>([^<]+)<\/code>/g, (whole, raw) => {
+    const text = raw.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    let path = null, suffix = '', m;
+    if(/^environments\.[A-Za-z0-9_<>-]+(\.[A-Za-z0-9_.-]+)+$/.test(text)) path = text;
+    // `<researcher_web>/zh/projects` 这种占位加路径：值后面把路径也拼上，hover 看到的就是完整地址
+    else if((m = text.match(/^<([a-z][a-z0-9_]*)>(\/\S*)?$/)) && cfgPerEnv(m[1])){ path = `environments.<env>.${m[1]}`; suffix = m[2] || ''; }
+    else if(/^[a-z][a-z0-9_]*$/.test(text) && cfgPerEnv(text)) path = `environments.<env>.${text}`;
+    else if(/^[a-z][a-z0-9_]*$/.test(text) && typeof SKILLCFG[text] !== 'object' && SKILLCFG[text] !== undefined) path = text;
+    if(!path) return whole;
+    const tip = cfgResolve(path, suffix);
+    return tip ? `<span class="cvar cfg" data-tip="${esc(tip)}">${raw}</span>` : whole;
+  });
+}
+
+function ctxValue(key){
+  const hit = ((CTXVARS||{}).variables||[]).find(v => v.key === key);
+  return hit || null;
+}
+function ctxShort(s, n=30){ return s.length > n ? s.slice(0, n-1) + '…' : s; }
+
+// inline() 之后再跑一遍：把 context.xxx 变成带上次取值的小标签。
+function ctxInline(text){
+  return inline(text).replace(/\bcontext\.([A-Za-z_][A-Za-z0-9_]*)\b/g, (whole, key) => {
+    const v = ctxValue(key);
+    if(!v) return whole;                               // context.yaml 这种不是引用的，原样留着
+    // 值不直接摆出来（一行里三个变量各拖一串 URL，路线就读不下去了），hover 再看；
+    // 总表在顶上随时能展开。没跑出来过的还是当场标出来——那是会判 BLOCK 的事，不能藏。
+    if(!v.declared)
+      return `<span class="cvar undecl" data-tip="intent.md「留给裁判的事实」里没有 ${key} 这一行——补上它，否则 runner 不一定交这个值，裁判取不到就判 BLOCK">context.${key}<u>!</u></span>`;
+    return v.known
+      ? `<span class="cvar" data-tip="${esc(v.last_value)}">context.${key}</span>`
+      : `<span class="cvar unknown" data-tip="已声明，但还没有任何一次跑批交出过这个值">context.${key}<u>？</u></span>`;
+  });
+}
+
+// 编辑态的一排变量芯片：点一下把 `context.<键名>` 插进当前正在写的那个框。
+// 人不用知道变量的语法、也不用记住有哪些键——这是「指导用户」那一半。
+function ctxPickHtml(id){
+  const vars = ((CTXVARS||{}).variables)||[];
+  if(!vars.length) return '';
+  const chips = vars.map(v => `<button type="button" class="cvchip${v.declared?'':' undecl'}"
+      title="${esc(v.declared ? (v.known ? '上次取值：'+v.last_value : '已声明，还没跑出来过')
+                             : 'intent.md 里没声明这个键，补一行 '+v.key+' 才稳')}"
+      onclick="ctxPick('${id}','${v.key}')">context.${v.key}</button>`).join('');
+  return `<div class="cvpick"><span>点一下插进光标处：</span>${chips}
+    <em>这些是「跑完才知道」的值。写死的地址和文案直接打进正文，不要用变量。</em></div>`;
+}
+function ctxPick(id, key){
+  const token = `context.${key}`;
+  const el = document.activeElement;
+  const target = (el && el.tagName === 'TEXTAREA' && el.closest(`#${id}`))
+    ? el : document.querySelector(`#${id} textarea[data-go]`);
+  if(!target) return;
+  const s = target.selectionStart ?? target.value.length;
+  const e2 = target.selectionEnd ?? s;
+  target.value = target.value.slice(0, s) + token + target.value.slice(e2);
+  target.selectionStart = target.selectionEnd = s + token.length;
+  target.focus();
+}
+
+function ctxPanelHtml(){
+  const c = CTXVARS; if(!c || !(c.variables||[]).length) return '';
+  const missing = c.variables.filter(v => !v.known).length;
+  const undeclared = c.variables.filter(v => !v.declared).length;
+  const rows = c.variables.map(v => `<tr>
+    <td class="k">context.${v.key}</td>
+    <td class="v${v.known ? '' : ' none'}">${v.known ? esc(v.last_value) : '还没跑出来过'}</td>
+    <td class="w">${v.declared ? '' : 'intent 未声明'}</td></tr>`).join('');
+  // 值已经就地贴在每一步的正文里了，总表是备查——默认收起来，只有出问题时才自动展开。
+  const bad = missing > 0;
+  const tag = bad ? `<em class="bad">${missing} 个从来没跑出来过</em>`
+            : c.last_run ? `值来自上次跑批 <code>${esc(c.last_run)}</code>` : '还没跑过，所以都是空的';
+  return tidy(`<details class="cvars" ${bad ? 'open' : ''}>
+    <summary><b>${c.variables.length} 个变量</b>${tag}</summary>
+    <p>跑的时候才产生的值，这里改不了。${c.envs.length > 1 ? '换环境在卡片上选。' : ''}
+      ${missing ? `<b>没跑出来过的，裁判取不到证，多半判 BLOCK。</b>` : ''}</p>
+    <table>${rows}</table></details>`);
+}
+function expectReadHtml(e, {id='', editable=true} = {}){
+  const st = DOCS[id] || {};
+  const d = st.data || e || {goal:'', steps:[]};
+  const editing = st.editing;                 // 'goal' | 步骤下标
+  const pen = key => editable
+    ? `<button class="ed-icon" onclick="expectDocEdit('${id}',${JSON.stringify(key)})">✎ 编辑</button>` : '';
+  const foot = key => `<div class="doc-foot" style="margin-top:9px">
+      <button onclick="expectDocSave('${id}',${JSON.stringify(key)})">保存</button>
+      <button class="ghost" onclick="expectDocCancel('${id}')">取消</button></div>`;
+
+  const goal = editing === 'goal'
+    ? `<div class="ex-goal"><div class="doc-field" style="margin:0"><label>goal:</label>
+        <textarea class="ed-in" rows="2" data-goal placeholder="这个场景要证明什么">${esc(d.goal||'')}</textarea></div>${foot('goal')}</div>`
+    : `<div class="ex-goal"><div class="ex-row" style="padding:0">
+        <span class="ex-k">goal:<small>要证明什么</small></span>
+        <div>${ctxInline(d.goal||'')}<span style="float:right;margin-left:10px">${pen('goal')}</span></div></div></div>`;
+
+  const steps = (d.steps||[]).map((sp, i) => {
+    if(editing === i){
+      return `<div class="ex-edit-step">
+        <div class="ed-step-head"><span class="ex-no">${i+1}</span>
+          <span class="ed-k">- go:</span><span class="ed-lbl">去哪看 · 打开哪个页面或视图</span>
+          <span class="sp"></span>
+          <button class="ed-x" onclick="expectDocMove('${id}',${i},-1)" ${i===0?'disabled':''}>↑</button>
+          <button class="ed-x" onclick="expectDocMove('${id}',${i},1)" ${i===d.steps.length-1?'disabled':''}>↓</button>
+          <button class="ed-x" onclick="expectDocDel('${id}',${i})">删</button></div>
+        <textarea class="ed-in" rows="1" data-go
+          placeholder="打开统计视图 http://localhost:4173/?view=stats 并读取三个数字">${esc(sp.go||'')}</textarea>
+        <div class="ed-step-head" style="margin:8px 0 4px"><span class="ed-k" style="padding-left:2px">check:</span>
+          <span class="ed-lbl">在这一页上要核实哪几件事</span></div>
+        <div class="ed-body">
+          ${sp.check.map((c, j) => `<div class="ed-check">
+            <span class="dot" style="font-family:var(--mono);color:var(--accent)">-</span>
+            <textarea class="ed-in" rows="1" data-check="${j}" placeholder="「总任务数」等于 0">${esc(c)}</textarea>
+            <button class="ed-x" onclick="expectDocDelCheck('${id}',${i},${j})">✕</button></div>`).join('')}
+          <button class="ed-add" onclick="expectDocAddCheck('${id}',${i})">＋ check</button>
+        </div>${ctxPickHtml(id)}${foot(i)}</div>`;
+    }
+    return `<div class="ex-step">
+      <header><span class="ex-no">${i+1}</span><span>steps[${i}]</span><span class="sp"></span>${pen(i)}</header>
+      <div class="ex-row"><span class="ex-k">go:<small>裁判去哪看</small></span><div>${ctxInline(sp.go||'')}</div></div>
+      <div class="ex-row"><span class="ex-k">check:<small>要核实的事</small></span>
+        <ul class="ex-checks">${(sp.check||[]).map(c=>`<li>${ctxInline(String(c))}</li>`).join('')}</ul></div>
+    </div>`;
+  }).join('');
+
+  return `<div class="doc">
+    ${editable ? OWNER.expect : ''}
+    ${ctxPanelHtml()}${goal}${steps}
+    ${editable ? `<button class="ed-add" onclick="expectDocAddStep('${id}')">＋ step</button>` : ''}</div>`;
+}
+
+function expectDocMount(id, {scenario, skill, data, mode='read'}){
+  const el = document.getElementById(id); if(!el) return;
+  DOCS[id] = {kind:'expect', scenario, skill, editing:null,
+              data:{goal:(data||{}).goal||'',
+                    steps:((data||{}).steps||[]).map(s => ({go:s.go||'', check:[...(s.check||[])]}))}};
+  expectDocRender(id);
+}
+function expectDocRender(id){
+  const el = document.getElementById(id); if(el) el.innerHTML = expectReadHtml(null, {id, editable:true});
+}
+function expectDocEdit(id, key){ const st = DOCS[id]; if(!st) return; st.editing = key; expectDocRender(id); }
+function expectDocCancel(id){
+  const st = DOCS[id]; if(!st) return;
+  expectDocReload(id).then(() => { st.editing = null; expectDocRender(id); });
+}
+async function expectDocReload(id){
+  const st = DOCS[id];
+  try{
+    const d = await (await fetch(`/api/scenarios/${st.scenario}/expect${q_(st.skill)}`)).json();
+    st.data = {goal:d.goal||'', steps:(d.steps||[]).map(s=>({go:s.go||'', check:[...(s.check||[])]}))};
+  }catch(e){}
+}
+function _exPull(id, key){
+  // 把正在编辑那一块的输入框读回内存，其它块保持原值
+  const el = document.getElementById(id), st = DOCS[id];
+  if(key === 'goal'){ st.data.goal = (el.querySelector('[data-goal]')||{}).value ?? st.data.goal; return; }
+  const box = el.querySelector('.ex-edit-step'); if(!box || typeof key !== 'number') return;
+  const step = st.data.steps[key]; if(!step) return;
+  step.go = (box.querySelector('[data-go]')||{}).value ?? step.go;
+  box.querySelectorAll('[data-check]').forEach(t => step.check[+t.dataset.check] = t.value);
+}
+function expectDocAddStep(id){ const st=DOCS[id]; st.data.steps.push({go:'', check:['']});
+                               st.editing = st.data.steps.length-1; expectDocRender(id); }
+function expectDocDel(id,i){ const st=DOCS[id]; st.data.steps.splice(i,1); st.editing=null; expectDocRender(id); }
+function expectDocMove(id,i,d){ _exPull(id,i); const s=DOCS[id].data.steps; const j=i+d;
+  if(j<0||j>=s.length) return; [s[i],s[j]]=[s[j],s[i]]; DOCS[id].editing=j; expectDocRender(id); }
+function expectDocAddCheck(id,i){ _exPull(id,i); DOCS[id].data.steps[i].check.push(''); expectDocRender(id); }
+function expectDocDelCheck(id,i,j){ _exPull(id,i); DOCS[id].data.steps[i].check.splice(j,1); expectDocRender(id); }
+
+async function expectDocSave(id, key){
+  const st = DOCS[id]; if(!st) return;
+  _exPull(id, key);
+  const status = $('#pb-status'); if(status) status.textContent = '保存中…';
+  try{
+    const res = await fetch(`/api/scenarios/${st.scenario}/expect`,
+      {method:'PUT', headers:{'Content-Type':'application/json'},
+       body: JSON.stringify({skill:st.skill, goal:st.data.goal, steps:st.data.steps})});
+    const d = await res.json();
+    if(!res.ok) throw new Error(d.detail || res.statusText);
+    await expectDocReload(id);
+    st.editing = null; expectDocRender(id);
+    if(status) status.textContent = `已保存 ${d.steps} 步 ${d.checks} 条确认`;
+    load();
+  }catch(e){ if(status) status.textContent = '保存失败：' + e.message; }
+}
+
+// 这次跑批为什么是这个结论——把散在各处的真因收成一句话顶在最上面。
+// 光看 verdict 看不出「裁判自己没跑完」和「裁判判了不通过」的区别，这两个的处理完全不同。
+function renderDiag(r){
+  if(r.error)
+    return `<div class="diag bad"><b>跑挂了</b><span>${esc(r.error)}</span></div>`;
+  if(r.judge_incomplete)
+    return `<div class="diag warn"><b>裁判没跑完</b><span>${esc(r.judge_incomplete)}
+      —— 没交出 judgment，所以判分脚本只能报 BLOCK。这不是业务失败，是裁判自己没走到终点，
+      通常是轮数不够或它绕远了。</span></div>`;
+  if(r.status === 'stopped')
+    return `<div class="diag neutral"><b>被手动停止</b><span>不是失败——是人点了「停止」提前收的口，
+      浏览器和录屏都正常关闭了，只是没跑完。</span></div>`;
+  if(r.status === 'needs_input')
+    return `<div class="diag warn"><b>等人回答</b><span>探索卡住了，回答后可以接着跑。</span></div>`;
+  if(r.status === 'blocked')
+    return `<div class="diag warn"><b>环境阻塞</b><span>不是业务失败，是跑不下去。</span></div>`;
+  if(r.status === 'failed')
+    return `<div class="diag bad"><b>验收不通过</b><span>裁判逐条取证后判定失败，看「裁判」页签。</span></div>`;
+  if(r.status === 'passed')
+    return `<div class="diag ok"><b>通过</b><span>裁判逐条取证，全部成立。</span></div>`;
+  return '';
+}
+
+function tab(name){
+  document.querySelectorAll('#dlg-body .tabs button').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll('#dlg-body .pane').forEach(p =>
+    p.hidden = p.dataset.pane !== name);
+}
+
+let currentRun = null;   // 当前详情弹窗展示的那次跑批，导出时直接复用，不重新拉一遍
+
+async function detail(rid){
+  const r = await (await fetch(`/api/runs/${rid}`)).json();
+  currentRun = r;
+  await loadIntentSpec();
+  $('#dlg-title').textContent = `${r.scenario} · ${r.run_id}`;
+  // 环境要跟判决贴在一起：同一条路线在 dev PASS、在 prod FAIL 是两回事，
+  // 事后翻记录时看不到跑的是哪个环境，这条记录就没法用。
+  $('#dlg-pill').innerHTML = `${r.env ? `<span class="chip env">${esc(r.env)}</span>` : ''}`
+    + `<span class="pill ${r.status}">${r.verdict||r.status}</span>`;
+  const run = r.steps || [], jud = r.judge_steps || [];
+
+  $('#dlg-body').innerHTML = `
+    <div class="tabs">
+      <button data-tab="overview" class="on" onclick="tab('overview')">概览</button>
+      <button data-tab="run" onclick="tab('run')">执行<span class="count">${run.length}</span></button>
+      <button data-tab="judge" onclick="tab('judge')">裁判<span class="count">${jud.length}</span></button>
+    </div>
+
+    <div class="pane" data-pane="overview">
+      ${renderDiag(r)}
+      <h4>结论</h4><div style="font-size:13px">${esc(r.summary||'')}</div>
+      ${r.notes?`<h4>备注</h4><pre>${esc(r.notes)}</pre>`:''}
+      <h4>用量</h4>${renderUsage(r.llm_calls)}
+      <h4>执行录屏</h4><video controls style="width:100%;border-radius:5px;background:#000"
+        src="/api/runs/${rid}/video?which=runner"></video>
+      ${jud.length?`<h4>裁判录屏</h4><video controls
+        style="width:100%;border-radius:5px;background:#000"
+        src="/api/runs/${rid}/video?which=judge"></video>`:''}
+      ${r.judge_output?`<h4>判分脚本输出</h4><pre>${esc(r.judge_output)}</pre>`:''}
+    </div>
+
+    <div class="pane" data-pane="run" hidden>
+      ${renderTrace(run, r.llm_calls, false)}
+    </div>
+
+    <div class="pane" data-pane="judge" hidden>
+      <h4>判定结果</h4>${renderJudgment(r.judgment, r.expect)}
+      <h4>裁判照的规矩</h4>
+      <div class="task"><details><summary style="cursor:pointer;font-size:12px;color:var(--muted)">
+        judge-protocol.md　取证协议（点开看全文）</summary>
+        <div class="stale" style="margin-top:9px">只读。它是 <b>skill-core 文件</b>，和开源版逐字同步——
+          要改得先改开源版再同步回来，在这儿就地改会让内部仓库和开源版分叉。</div>
+        <pre id="jp-text">读取中…</pre></details></div>
+      <h4>取证过程</h4>${renderTrace(jud, r.llm_calls, true)}
+    </div>
+
+`;
+
+  // 取证协议是技能级共用文件，按需拉一次，不塞进跑批接口
+  fetch(`/api/skills/${encodeURIComponent(r.skill||'roadbook')}/judge-protocol`)
+    .then(res => res.json())
+    .then(d => { const el = $('#jp-text'); if(el) el.textContent = d.text || '（没有这份文件）'; })
+    .catch(() => { const el = $('#jp-text'); if(el) el.textContent = '（读不到 judge-protocol.md）'; });
+
+  dlg.showModal();
+}
+
+// 导出成一份自带样式、离线能开的 HTML。
+// 刻意复用看板自己的渲染函数和 <style>——导出件和屏幕上看到的永远是同一套东西，
+// 不另写一份导出模板（那样两边一定会漂）。页签在导出件里摊平成顺序小节，不依赖 JS；
+// 步骤仍然是 <details>，原生可折叠。
+function exportRunHtml(){
+  const r = currentRun;
+  if(!r) return;
+  const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  const run = r.steps || [], jud = r.judge_steps || [];
+  const now = new Date().toLocaleString('zh-CN');
+
+  const doc = `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${esc(r.scenario)} · ${esc(r.run_id)}</title>
+<style>${css}
+  body{padding:26px 20px 60px}
+  .doc{max-width:960px;margin:0 auto}
+  .doc h2{font-size:15px;margin:26px 0 10px;padding-top:16px;border-top:1px solid var(--line)}
+  .doc h2:first-of-type{border-top:none;padding-top:0}
+  .doc .meta{font:11.5px var(--mono);color:var(--muted);margin-bottom:18px}
+  .tl-step>summary{background:transparent}
+</style></head>
+<body><div class="doc">
+  <h1 style="font:600 17px var(--mono);margin:0 0 6px">${esc(r.scenario)}</h1>
+  <div class="meta">${esc(r.run_id)} · ${esc(String(r.verdict||r.status))}
+    · 技能 ${esc(r.skill||'')} · ${esc(r.started_at||'')} → ${esc(r.finished_at||'')}</div>
+
+  ${renderDiag(r)}
+
+  <h2>结论</h2><div style="font-size:13px">${esc(r.summary||'')}</div>
+  ${r.notes?`<h2>备注</h2><pre>${esc(r.notes)}</pre>`:''}
+
+  <h2>用量</h2>${renderUsage(r.llm_calls)}
+
+  <h2>任务要求</h2>${intentReadHtml((r.task||{}).intent_doc, {archived:(r.task||{}).archived, editable:false})}
+  <h3 style="font-size:13px;margin:14px 0 6px">playbook.md　执行步骤</h3>${renderPlaybookRaw(r.task)}
+
+  <h2>执行轨迹（${run.length} 步）</h2>${renderTrace(run, r.llm_calls, false)}
+
+  <h2>判定结果</h2>${renderJudgment(r.judgment, r.expect)}
+  ${jud.length?`<h2>裁判取证过程（${jud.length} 步）</h2>${renderTrace(jud, r.llm_calls, true)}`:''}
+  ${r.judge_output?`<h2>判分脚本输出</h2><pre>${esc(r.judge_output)}</pre>`:''}
+
+  <h2>验收路线</h2>${expectReadHtml(r.expect, {editable:false})}
+
+  <h2>录屏</h2>
+  <div class="hint">录屏文件没有打进这份导出件（太大）。原件在跑批目录：
+    <code>storage/${esc(r.run_id)}/runner/video/*.webm</code>${jud.length
+      ? `、<code>storage/${esc(r.run_id)}/judge/video/*.webm</code>` : ''}</div>
+
+  <div class="meta" style="margin-top:34px">导出于 ${esc(now)} · Roadbook Runner</div>
+</div></body></html>`;
+
+  const blob = new Blob([doc], {type: 'text/html;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${r.run_id}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+load();
+loadToolKinds();
+loadIntentSpec();
+// 后台刷新撞上服务重启会 fetch 失败——那是瞬时的，吞掉别往控制台甩未处理异常
+setInterval(() => { if(!Object.keys(running).length) load().catch(() => {}); }, 8000);
+</script>
+</body>
+</html>

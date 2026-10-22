@@ -1,0 +1,7 @@
+playwright>=1.47
+openai>=1.50
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pyyaml>=6.0
+python-dotenv>=1.0
+jsonschema>=4.23

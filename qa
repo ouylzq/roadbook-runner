@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# qa-agent CLI 入口。自动用项目自己的 venv，不污染全局。
+cd "$(dirname "$0")" || exit 1
+if [ ! -x .venv/bin/python ]; then
+  echo "没找到 .venv，先跑： python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+  exit 2
+fi
+exec .venv/bin/python run.py "$@"
