@@ -27,7 +27,7 @@ python3 -m http.server 4173 --directory "${ROADBOOK_REPO:-../roadbook}/demo-app"
 
 .venv/bin/python run.py --list
 .venv/bin/python run.py todo-complete
-.venv/bin/python run.py --serve                   # 打开 http://localhost:8900
+.venv/bin/python run.py serve                   # 打开 http://localhost:8900
 ```
 
 ## LLM
