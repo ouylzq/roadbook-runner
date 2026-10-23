@@ -53,6 +53,10 @@ class Run:
     questions: list[str] = field(default_factory=list)   # needs_input 时等人回答的问题
     resumable: bool = False            # 现场已冻结，可以接着跑
     error: str | None = None
+    # 外部迁移来的历史记录（roadbook/runs/ 时代、Claude Code 跑出来的）：只有文字产物，
+    # 没有轨迹和录屏。看板据此隐藏录屏/轨迹区块、在历史列表里打「外部」标。
+    external: bool = False
+    source: str = ""                   # external 时指向原始目录，供追溯
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

@@ -32,7 +32,7 @@ from .playbook import PLAYBOOK_FILE, count_steps
 from .prompts import PromptLibrary, TaskPrompts
 from .skills import Skill
 from .store import Store
-from .subagents import SubAgentLoader
+from .subagents import SubAgent, SubAgentLoader
 from .traces import Run, Step
 
 EventListener = Callable[[str, Any], None]
@@ -52,7 +52,8 @@ TASK_FILES = ("intent.md", "playbook.md")
 
 
 def new_run_id(scenario: str) -> str:
-    return f"{datetime.now():%Y%m%d-%H%M%S}-{scenario}"
+    # 场景名可以是 `team/login` 这类带分组的路径，run_id 要落成 storage/ 下的一层目录
+    return f"{datetime.now():%Y%m%d-%H%M%S}-{scenario.replace('/', '-')}"
 
 
 def resume_run_id(previous: str) -> str:
@@ -114,6 +115,17 @@ class RunSession:
                                    memory_brief=self._memory_brief)
         self.agents = SubAgentLoader(settings)
         self.llm = LLM(settings)
+        # 子代理在 agents/<名字>.md frontmatter 里声明了 model 就用它自己的客户端
+        # （如 runner 用便宜快的 haiku、裁判默认全局 sonnet），没声明就共享全局那份
+        self._agent_llms: dict[str, LLM] = {}
+
+    def _llm_for(self, agent: SubAgent) -> LLM:
+        if not agent.model or agent.model == self.settings.llm_model:
+            return self.llm
+        client = self._agent_llms.get(agent.model)
+        if client is None:
+            client = self._agent_llms[agent.model] = LLM(self.settings, model=agent.model)
+        return client
 
     def _configured_origin(self) -> str | None:
         config = self.skill.config()
@@ -171,7 +183,8 @@ class RunSession:
         resume() 只传 resume_transcript/resume_reply，两边不会同时传。
         """
         try:
-            loop = AgentLoop(self.agents.load(MAIN_AGENT), self.llm,
+            runner_agent = self.agents.load(MAIN_AGENT)
+            loop = AgentLoop(runner_agent, self._llm_for(runner_agent),
                              on_step=lambda s: self._on_step(s, judge=False),
                              on_llm_call=lambda info: self._on_llm_call(info, judge=False),
                              required_facts=required_context_keys(self.scenario),
@@ -291,7 +304,8 @@ class RunSession:
                 context_yaml=(self.run_dir / CONTEXT_FILE).read_text(encoding="utf-8"),
                 origin=self._origin,
             )
-            loop = AgentLoop(self.agents.load(JUDGE_AGENT), self.llm,
+            judge_agent = self.agents.load(JUDGE_AGENT)
+            loop = AgentLoop(judge_agent, self._llm_for(judge_agent),
                              on_step=lambda s: self._on_step(s, judge=True),
                              on_llm_call=lambda info: self._on_llm_call(info, judge=True),
                              cancel=self.cancel,

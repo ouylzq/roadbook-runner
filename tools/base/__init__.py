@@ -6,6 +6,7 @@ XML 语法。真正的工具在上一层目录里，一个文件一个。
 """
 from .args import ParsedToolArgs, parse_tool_args, parse_tool_args_result, repair_leaked_args
 from .registry import Handler, JsonSchema, Tool, ToolContext, ToolRegistry
+from .scenario_name import legal_scenario_name
 
 __all__ = [
     "Handler",
@@ -14,6 +15,7 @@ __all__ = [
     "Tool",
     "ToolContext",
     "ToolRegistry",
+    "legal_scenario_name",
     "parse_tool_args",
     "parse_tool_args_result",
     "repair_leaked_args",

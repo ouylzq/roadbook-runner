@@ -64,9 +64,8 @@ SECTIONS: tuple[Section, ...] = (
             "跑之前要先有什么：造数脚本、已存在的项目、登录态。不需要就删掉这一节。",
             "先跑 `scripts/seed_draft.sh`，记住它打印的 draft_id / project_id。"),
     Section("facts", "留给裁判的事实", False,
-            "只放「跑的时候才知道」的东西：新建对象的 id、实际点开的那一条。\n"
-            "这里每写一行 `<键名>:`，验收路线里就用 `context.<键名>` 引用它，两边名字必须一致。\n"
-            "**写死的值不要列在这里**——地址、固定文案直接写进验收路线。\n"
+            "跑完要写进 context.yaml、给裁判在验收路线里引用的值（写成 context.xxx）。\n"
+            "只放「跑的时候才知道」的东西：新建对象的 id、实际输入的名字。\n"
             "**别把「应该是多少」写进来**——那样就成了裁判按 runner 的说法判 runner。",
             "```yaml\nquery: playwright end-to-end testing\nlanding_url: <落地页最终 URL>\n```"),
     Section("cleanup", "清理", True,
@@ -232,16 +231,6 @@ def contract() -> str:
         "",
         "三条硬规矩：**不写步骤**（那是 playbook.md，探索跑出来的）、"
         "**不写期望值**（那是 expect.yaml）、**不写工具名**（换个运行时就废了）。",
-        "",
-        "**「跑的时候才知道」的值怎么接**（最容易写错、也最该由你拧好的一根线）：",
-        "- 写死的地址、固定文案、固定选项：验收路线里**直接写那个值**，不要为它造变量。",
-        "  例：路线里写「打开 https://www.gov.cn/zhengce/」，而不是先声明 list_url 再引用 context.list_url。",
-        "- 只有**跑的时候才定下来**的东西才开变量：新建对象的 id、从列表里挑中的那一条的标题。",
-        "  做法是**成对**的，缺一半就会让裁判取不到值、整场判 BLOCK：",
-        "  1. 在 intent.md 的「留给裁判的事实」里写一行 `<键名>: <值是什么>`；",
-        "  2. 在 expect.yaml 里用 `context.<同一个键名>` 引用它。",
-        "- 键名用能自解释的英文小写下划线（`issue_number`、`landing_url`），两边逐字一致。",
-        "- 判断口径：**这个值在你写文件的时候就已经知道了，就不要开变量**。",
         "要例子就 read_resource 读 `references/intent-spec.md`（规范全文）。",
     ]
     return "\n".join(lines)

@@ -15,17 +15,24 @@ from .domain import RunStatus
 from .traces import Run
 
 
+def safe_stem(scenario: str) -> str:
+    """场景名 → 知识库文件名。分组名（team/login）里的斜杠换成双下划线：
+    这些文件本来就按场景平铺存放，嵌套目录只会让读写两端各自发明规则。"""
+    return scenario.replace("/", "__")
+
+
 class KnowledgeStore:
     def __init__(self, directory: Path):
         self.directory = directory
 
     def absorb(self, record: Run, run_dir: Path) -> None:
+        stem = safe_stem(record.scenario)
         for sub in ("facts", "experiences", "reflections"):
             (self.directory / sub).mkdir(parents=True, exist_ok=True)
 
         context = run_dir / "context.yaml"
         if context.exists():
-            (self.directory / "facts" / f"{record.scenario}.yaml").write_text(
+            (self.directory / "facts" / f"{stem}.yaml").write_text(
                 f"# 最近一次跑批 {record.run_id} 留下的事实\n" + context.read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
@@ -35,11 +42,11 @@ class KnowledgeStore:
             "verdict": str(record.verdict), "status": str(record.status),
             "steps": len(record.steps), "judge_steps": len(record.judge_steps),
         }
-        with (self.directory / "experiences" / f"{record.scenario}.jsonl").open("a", encoding="utf-8") as f:
+        with (self.directory / "experiences" / f"{stem}.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         if record.notes and record.status is not RunStatus.PASSED:
-            with (self.directory / "reflections" / f"{record.scenario}.md").open("a", encoding="utf-8") as f:
+            with (self.directory / "reflections" / f"{stem}.md").open("a", encoding="utf-8") as f:
                 f.write(f"\n## {record.run_id} · {record.verdict or record.status}\n\n{record.notes}\n")
 
     def briefing(self, scenario: str, runs: int = 3, chars: int = 900) -> str:
@@ -61,7 +68,7 @@ class KnowledgeStore:
                  for r in reversed(rows)]
         out = ["## 这条路最近几次跑批（背景参考，不是这次的结论）", "", *lines]
 
-        path = self.directory / "reflections" / f"{scenario}.md"
+        path = self.directory / "reflections" / f"{safe_stem(scenario)}.md"
         if path.exists():
             last = path.read_text(encoding="utf-8").split("\n## ")[-1].strip()
             if last:
@@ -71,7 +78,7 @@ class KnowledgeStore:
 
     def trend(self, scenario: str, limit: int = 10) -> list[dict[str, Any]]:
         """最近 N 次的结论，给「这条路最近稳不稳」用。"""
-        path = self.directory / "experiences" / f"{scenario}.jsonl"
+        path = self.directory / "experiences" / f"{safe_stem(scenario)}.jsonl"
         if not path.exists():
             return []
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]

@@ -53,6 +53,12 @@ class Settings:
     atom_refutes_demote: int        # 已落盘的条目被几个不同跑批否决就划掉（预留，这版不做）
     atom_pending_ttl_days: int      # 候选多少天没人验证就过期
 
+    # prod 围栏：默认不许从看板触发线上（prod）跑批——prod 建出来的用户删不掉，
+    # 注册类用例还要人工点头。要对线上跑回归的人显式打开（QA_AGENT_ALLOW_PROD=on）。
+    allow_prod: bool
+    # 跑批结束推飞书（自定义机器人 webhook）。空 = 不推；推送失败只记日志，不影响结论。
+    webhook_url: str
+
     @property
     def agents_dir(self) -> Path:
         return _env_path("QA_AGENT_AGENTS", self.root / "agents")
@@ -63,7 +69,7 @@ class Settings:
         if explicit:
             return Path(explicit).expanduser()
         # ROADBOOK_REPO 指向 skill 根；SkillLoader 要的是它的父目录。这样独立开发时可指向
-        # 任意 checkout，在本仓库 checkout 里则直接用旁边的 ../roadbook。
+        # 与路书资产仓库并排布局时直接用旁边的 ../roadbook。
         roadbook_repo = os.getenv("ROADBOOK_REPO")
         if roadbook_repo:
             return Path(roadbook_repo).expanduser().resolve().parent
@@ -149,6 +155,8 @@ class Settings:
             atom_refutes_drop=int(os.getenv("QA_AGENT_ATOM_REFUTES_DROP", "1")),
             atom_refutes_demote=int(os.getenv("QA_AGENT_ATOM_REFUTES_DEMOTE", "2")),
             atom_pending_ttl_days=int(os.getenv("QA_AGENT_ATOM_PENDING_TTL_DAYS", "30")),
+            allow_prod=_env_flag("QA_AGENT_ALLOW_PROD", False),
+            webhook_url=os.getenv("QA_AGENT_WEBHOOK_URL", "").strip(),
         )
 
 

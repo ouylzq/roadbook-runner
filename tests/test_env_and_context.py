@@ -112,12 +112,12 @@ def test_describe_lists_keys_with_last_values(root: Path, tmp_path: Path) -> Non
     facts.mkdir()
     (facts / "ctx.yaml").write_text(
         "# 最近一次跑批 20260923-151140-ctx 留下的事实\n"
-        "app_base: https://app-dev.example.com\naccount_email: a@b.c\n", encoding="utf-8")
+        "app_base: https://app-dev.example.ai\naccount_email: a@b.c\n", encoding="utf-8")
 
     out = describe(sc, facts)
     by_key = {v["key"]: v for v in out["variables"]}
     assert set(by_key) == {"app_base", "account_email", "missing_key"}
-    assert by_key["app_base"]["last_value"] == "https://app-dev.example.com"
+    assert by_key["app_base"]["last_value"] == "https://app-dev.example.ai"
     assert by_key["app_base"]["known"] and by_key["app_base"]["declared"]
     # 意图书没点名的键仍然要列出来——少一份人写的交代是个信号，不是隐藏的理由
     assert by_key["account_email"]["known"] and not by_key["account_email"]["declared"]

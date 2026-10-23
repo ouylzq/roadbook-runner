@@ -19,6 +19,7 @@ from .domain import RunStatus, Scenario
 from .events import FrameStore
 from .intent import parse_intent
 from .knowledge import KnowledgeStore
+from .notify import notify_finished
 from .report import ReportWriter
 from .session import EventListener, FinishedHook, RunSession, new_run_id, resume_run_id
 from .skills import Skill, SkillLoader
@@ -52,10 +53,11 @@ class QaAgent:
 
     # ---- 跑批 -----------------------------------------------------------------
     def _hooks(self, skill: Skill) -> Sequence[FinishedHook]:
-        # 收尾三件事：记事实/流水、写报告、给原子候选数票。数票要知道写到哪个技能的 atoms/，
-        # 所以 hook 按技能现做一个。
+        # 收尾四件事：记事实/流水、写报告、给原子候选数票、推飞书。数票要知道写到哪个
+        # 技能的 atoms/，所以 hook 按技能现做一个；飞书通知与技能无关，全局一份。
         return (self.knowledge.absorb, self.reports.write,
-                lambda _record, _run_dir: self.atoms.settle(skill))
+                lambda _record, _run_dir: self.atoms.settle(skill),
+                lambda record, _run_dir: notify_finished(self.settings, record))
 
     def run(self, skill: Skill, scenario_name: str, *, run_id: str | None = None,
             headless: bool = True, emit: EventListener | None = None,
@@ -96,8 +98,11 @@ class QaAgent:
         return session.resume(transcript, answers)
 
     def author(self, skill: Skill, ask: str, *, scenario: str | None = None,
-               url: str | None = None) -> AuthorResult:
-        return self._authoring.author(skill, ask, scenario=scenario, url=url)
+               url: str | None = None, name: str | None = None,
+               project: str | None = None,
+               config_hints: dict[str, str] | None = None) -> AuthorResult:
+        return self._authoring.author(skill, ask, scenario=scenario, url=url, name=name,
+                                      project=project, config_hints=config_hints)
 
     # ---- 查历史 ---------------------------------------------------------------
     def run_dir(self, run_id: str) -> Path:

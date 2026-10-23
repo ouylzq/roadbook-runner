@@ -5,6 +5,7 @@ handler 只做三件事：解析请求、调门面、整理响应。业务全在
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import threading
 import time
@@ -18,19 +19,29 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tools import BROWSER_TOOLS, REGISTRY, Tool
+from tools.base import legal_scenario_name
 
 from . import recorder
 from .app import QaAgent
 from .cancel import CancelRegistry
 from .concurrency import RunGate
 from .context_vars import describe as describe_context
+from .doctor import Doctor
 from .events import EventStream, FrameStore
 from .expect import EmptyRouteError, load_expect, save_expect
 from .intent import IntentError, load_intent, save_intent
 from .intent import spec as intent_spec
 from .playbook import PLAYBOOK_FILE, PlaybookError, load_playbook, save_playbook
+from .public_config import (
+    extract_origins,
+    reverse_lookup,
+    sanitize_skill_config,
+    suggest_key,
+    validate_entry,
+)
 from .session import JUDGE_PROTOCOL, new_run_id, resume_run_id
 from .skills import Skill
+from .traces import Run
 
 frames = FrameStore()
 stream = EventStream()
@@ -60,14 +71,6 @@ class RunRequest(BaseModel):
     skill: str | None = None
     headless: bool = True
     env: str | None = None      # 跑哪个环境；只认场景 frontmatter 里声明过的值
-
-
-class AuthorRequest(BaseModel):
-    ask: str
-    skill: str | None = None
-    scenario: str | None = None    # 给了就是改，不给就是新建
-    url: str | None = None
-    project: str | None = None     # 新建时指定放进哪个项目；None = 不挪，agent 放哪算哪
 
 
 class ExpectRequest(BaseModel):
@@ -114,6 +117,16 @@ def _skill(name: str | None) -> Skill:
         return core.skill(name)
     except FileNotFoundError as e:
         raise HTTPException(404, str(e)) from e
+
+
+def _prod_fence(env: str) -> None:
+    """prod 围栏：线上跑批默认挡在服务端——前端只是体验，这里是真闸门。
+    prod 建出来的用户删不掉，注册类用例还要人工点头，所以默认宁可跑不了。"""
+    if (env or "").strip().lower() == "prod" and not core.settings.allow_prod:
+        raise HTTPException(
+            403,
+            "prod 被围栏挡住了：看板默认不许触发线上跑批（prod 建出来的用户删不掉）。"
+            "确实要对线上跑回归，在 .env 里设 QA_AGENT_ALLOW_PROD=on 再重启服务。")
 
 
 def _spawn(run_id: str, work: Callable[[], object], first_phase: str) -> None:
@@ -166,34 +179,18 @@ def api_tools() -> dict[str, str]:
 
 
 # ---- 资产 ---------------------------------------------------------------------
-def _safe_name(name: str | None) -> str:
-    """项目名就是 scenarios/ 下的目录名：非空、不带路径分隔符、不玩路径把戏。"""
-    name = (name or "").strip()
-    if not name or name in {".", ".."} or name.startswith(".") \
-            or "/" in name or "\\" in name:
-        raise HTTPException(400, f"非法名称: {name!r}")
-    return name
-
-
-def _project_dirs(skill_root: Path) -> list[str]:
-    """scenarios/ 下的项目目录（不带 intent.md 的子目录）。空项目也算，看板要能显示它。"""
-    scen = skill_root / "scenarios"
-    if not scen.is_dir():
-        return []
-    return sorted(d.name for d in scen.iterdir()
-                  if d.is_dir() and not d.name.startswith(".") and not (d / "intent.md").exists())
-
-
-def _move_scenario_dir(skill, scen_name: str, project: str) -> None:
-    """把场景目录挪进 scenarios/<project>/；project 为空串 = 移回根（退出分组）。"""
-    sc = skill.scenario(scen_name)
-    target_parent = (skill.scenarios_dir / project) if project else skill.scenarios_dir
-    if project and not target_parent.is_dir():
-        raise HTTPException(400, f"项目目录不存在: {project}")
-    target = target_parent / sc.name
-    if target.exists():
-        raise HTTPException(400, f"目标已存在: {target.relative_to(skill.root)}")
-    shutil.move(str(sc.dir), str(target))
+def _latest_for(scenario_name: str, latest: dict[str, Run]) -> Run | None:
+    """卡片归属的历史记录：先按全名精确匹配，对不上再按叶子名认领——
+    历史记录是平铺命名（login），现在的卡是分组命名（team/login），名字对不上
+    卡片就会对着一屋子历史说「还没跑过」。外部记录（roadbook/runs 迁来的文字产物）
+    没有封面和录屏，不上卡片，只在历史列表里。"""
+    exact = latest.get(scenario_name)
+    if exact:
+        return exact
+    leaf = scenario_name.rsplit("/", 1)[-1]
+    cands = [r for k, r in latest.items()
+             if (k == leaf or k.endswith("/" + leaf)) and not r.external]
+    return max(cands, key=lambda r: r.run_id) if cands else None
 
 
 @app.get("/api/skills")
@@ -203,7 +200,7 @@ def api_skills() -> list[dict[str, Any]]:
     for skill in core.skills.list_all():
         scenarios = []
         for sc in skill.scenarios():
-            last = latest.get(sc.name)
+            last = _latest_for(sc.name, latest)
             scenarios.append({
                 **sc.to_dict(),
                 "last": ({"run_id": last.run_id, "status": str(last.status), "verdict": str(last.verdict),
@@ -213,86 +210,165 @@ def api_skills() -> list[dict[str, Any]]:
             })
         out.append({"name": skill.name, "description": skill.description,
                     "resources": len(skill.resources()), "scenarios": scenarios,
-                    "projects": _project_dirs(skill.root)})
+                    "projects": skill.project_groups()})
     return out
 
 
-class ProjectRequest(BaseModel):
+class AuthorRequest(BaseModel):
+    ask: str
     skill: str | None = None
-    name: str | None = None
-    to: str | None = None            # 改名时的新名字
+    scenario: str | None = None    # 给了就是改，不给就是新建
+    url: str | None = None
+    name: str | None = None        # 新建时点名场景目录名；留空由模型起
+    project: str | None = None     # 新建时指定项目分组（scenarios/<项目>/<场景>/）
+    config_entries: list[dict[str, str]] = []   # 确认卡上 PM 点头的新域名，先落配置再生成
 
 
-@app.post("/api/projects")
-def api_project_create(req: ProjectRequest) -> dict[str, Any]:
-    name = _safe_name(req.name)
-    root = _skill(req.skill).root / "scenarios" / name
-    if root.exists():
-        raise HTTPException(400, f"已存在: scenarios/{name}")
-    root.mkdir(parents=True)
-    return {"ok": True, "project": name}
+# 生成任务台账（内存）：让"生成中"状态跨刷新可见、失败不再无痕。
+# 服务重启即清——重启时正在生成的任务本来也不存在了。
+AUTHOR_TASKS: dict[str, dict[str, Any]] = {}
+AUTHOR_TASKS_LOCK = threading.Lock()
 
 
-@app.post("/api/projects/rename")
-def api_project_rename(req: ProjectRequest) -> dict[str, Any]:
-    name = _safe_name(req.name)
-    to = _safe_name(req.to)
-    root = _skill(req.skill).root / "scenarios" / name
-    if not root.is_dir():
-        raise HTTPException(404, f"项目不存在: {name}")
-    if (root / "intent.md").exists():
-        raise HTTPException(400, f"{name} 是平铺场景不是项目")
-    target = root.parent / to
-    if target.exists():
-        raise HTTPException(400, f"目标已存在: scenarios/{to}")
-    root.rename(target)
-    return {"ok": True, "project": to}
+@app.get("/api/author/active")
+def api_author_active() -> dict[str, Any]:
+    with AUTHOR_TASKS_LOCK:
+        items = sorted(AUTHOR_TASKS.values(), key=lambda t: t["started_at"], reverse=True)[:20]
+    return {"running": [t for t in items if t["status"] == "running"], "recent": items}
 
 
-@app.delete("/api/projects/{name}")
-def api_project_delete(name: str, skill: str | None = None) -> dict[str, Any]:
-    name = _safe_name(name)
-    root = _skill(skill).root / "scenarios" / name
-    if not root.is_dir():
-        raise HTTPException(404, f"项目不存在: {name}")
-    try:
-        root.rmdir()                                 # 只删得动空的；有场景就报错
-    except OSError:
-        raise HTTPException(400, f"项目 {name} 下还有场景，先移走再删")
-    return {"ok": True}
-
-
-class MoveRequest(BaseModel):
+class ConfigMatchRequest(BaseModel):
+    text: str = ""
+    url: str | None = None
     skill: str | None = None
-    project: str = ""                # 空串 = 移回根，退出分组
 
 
-@app.post("/api/scenarios/{name}/move")
-def api_scenario_move(name: str, req: MoveRequest) -> dict[str, Any]:
-    project = _safe_name(req.project) if req.project else ""
-    skill = _skill(req.skill)
-    _move_scenario_dir(skill, name, project)
-    return {"ok": True, "scenario": name, "project": project}
+@app.post("/api/skills/{skill}/config/match")
+def api_config_match(skill: str, req: ConfigMatchRequest) -> dict[str, Any]:
+    """生成前的域名反查（确定性正则，不经过模型）：
+    文本/地址里的 origin 命中现有配置 → 告诉生成 agent 用键名引用；
+    没命中 → 返回建议键名，前端弹确认卡，PM 点头才落配置。"""
+    sk = _skill(skill)
+    cfg = sk.config()
+    matched, fresh = [], []
+    for origin in extract_origins(f"{req.text}\n{req.url or ''}"):
+        hit = reverse_lookup(cfg, origin)
+        if hit:
+            matched.append({"origin": origin, "env": hit[0], "key": hit[1]})
+        else:
+            fresh.append({"origin": origin, "suggested_key": suggest_key(origin)})
+    return {"matched": matched, "new": fresh}
 
 
 @app.post("/api/scenarios/author")
 def api_author(req: AuthorRequest) -> dict[str, Any]:
-    """用自然语言建或改一个场景。同步返回——这一步不碰浏览器，通常几十秒。"""
-    result = core.author(_skill(req.skill), req.ask, scenario=req.scenario, url=req.url)
-    # 新建时指了项目：agent 落笔的位置不归它管，生成完把目录挪进去。
-    if req.scenario is None and req.project and result.ok and result.scenario:
-        _move_scenario_dir(_skill(req.skill), result.scenario, _safe_name(req.project))
-    return {"ok": result.ok, "scenario": req.scenario or result.scenario, "summary": result.summary,
-            "notes": result.notes, "files": result.files, "steps": result.steps}
+    """异步提交：立刻返回 author_id，进度和结果走 SSE（/api/author/{aid}/events）。
+
+    以前是同步等一次 LLM 调用——设计假设"几十秒的短调用"，网关一抖 PM 的弹窗就无限
+    "整理中"。现在复用跑批的异步机制（_spawn + 事件流）：进度可见、关掉弹窗不影响生成。
+    """
+    sk = _skill(req.skill)
+    aid = f"author-{time.strftime('%Y%m%d%H%M%S')}"
+    cancels.create(aid)
+
+    # 选了项目但没填场景名 → 自动补叶子名。绝不能拿项目分组名当场景名：
+    # 2026-10-23 实测那样会把 intent/expect 写进分组目录根部，整个组的场景全部隐身。
+    if not req.scenario and req.project and not req.name:
+        req.name = f"scene-{time.strftime('%H%M%S')}"
+
+    # 确认卡上 PM 点头的新域名：先落配置，再把「地址 → 键」映射交给生成 agent 当硬约束。
+    # 配置的键和值永远来自 PM 的确认，模型只负责在场景里引用键名。
+    config_hints: dict[str, str] = {}
+    cfg = _load_skill_config(sk)
+    envs = cfg.setdefault("environments", {})
+    for e in req.config_entries or []:
+        env, key, value = e.get("env", ""), e.get("key", ""), e.get("value", "")
+        if (err := validate_entry(env, key, value, known_envs=sorted(envs))) is not None:
+            raise HTTPException(400, err)
+        bucket = envs.setdefault(env, {})
+        if not isinstance(bucket, dict):
+            raise HTTPException(400, f"environments.{env} 不是键值结构")
+        bucket[key] = value
+        config_hints[value] = key
+        _write_skill_config(sk, cfg)
+    for origin in extract_origins(f"{req.ask}\n{req.url or ''}"):
+        hit = reverse_lookup(cfg, origin)
+        if hit:
+            config_hints.setdefault(origin, hit[1])
+
+    # 提交瞬间先落占位 intent.md（有名字的新建才做）——"添加成功"是即时的：
+    # 卡片立刻出现在列表里标「生成中」，生成完成后原地覆盖，失败则清掉占位不留空壳
+    stub_dir = None
+    if not req.scenario and (req.name or req.project):
+        full = "/".join(x for x in (req.project, req.name) if x)
+        if full and legal_scenario_name(full):
+            stub_dir = Path(sk.scenarios_dir) / full
+            try:
+                stub_dir.mkdir(parents=True, exist_ok=False)
+                ask_head = (req.ask or "")[:60]
+                (stub_dir / "intent.md").write_text(
+                    f"---\nname: {req.name or full}\n"
+                    f"description: ⏳ 场景生成中（{ask_head}）——完成后本描述会被真实内容替换\n"
+                    f"---\n\n# {req.name or full}\n\n（正在生成，约 1~3 分钟）\n",
+                    encoding="utf-8")
+            except FileExistsError:
+                stub_dir = None
+
+    entry: dict[str, Any] = {"aid": aid, "name": req.name or "", "scenario": None,
+                             "project": req.project or "", "ask": (req.ask or "")[:60],
+                             "status": "running", "ok": None,
+                             "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    with AUTHOR_TASKS_LOCK:
+        AUTHOR_TASKS[aid] = entry
+
+    def work():
+        try:
+            result = core.author(sk, req.ask, scenario=req.scenario, url=req.url,
+                             name=req.name, project=req.project,
+                             config_hints=config_hints or None)
+        except Exception as e:
+            if stub_dir is not None and stub_dir.exists() and not (stub_dir / "expect.yaml").exists():
+                shutil.rmtree(stub_dir, ignore_errors=True)   # 生成失败：占位一并撤掉，列表不留空壳
+            with AUTHOR_TASKS_LOCK:
+                entry.update(status="error", ok=False, summary=f"{type(e).__name__}: {e}")
+            print(f"[author] {aid} 失败：{type(e).__name__}: {e}")
+            raise
+        with AUTHOR_TASKS_LOCK:
+            entry.update(status="done", ok=result.ok, scenario=result.scenario,
+                         summary=(result.summary or "")[:100])
+        print(f"[author] {aid} 完成：scenario={result.scenario} ok={result.ok} 文件 {len(result.files)} 个")
+        stream.emit(aid, "done", {"status": "done", "result": {
+            "ok": result.ok, "scenario": result.scenario,
+            "summary": result.summary, "notes": result.notes, "files": result.files}})
+
+    _spawn(aid, work, "整理中：读现有场景学格式、生成三件套…")
+    return {"author_id": aid, "scenario_dir": str(stub_dir) if stub_dir else None}
 
 
-@app.get("/api/scenarios/{name}/runs")
+@app.get("/api/author/{aid}/events")
+def api_author_events(aid: str) -> StreamingResponse:
+    """生成任务的进度流：和跑批的 events 同一条通道约定，done 即收口。"""
+    def generate():
+        cursor = 0
+        for _ in range(SSE_MAX_POLLS):
+            for event in stream.since(aid, cursor):
+                cursor += 1
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                if event["kind"] == "done":
+                    stream.close(aid)
+                    return
+            time.sleep(SSE_POLL_SECONDS)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.get("/api/scenarios/{name:path}/runs")
 def api_scenario_runs(name: str, limit: int = 20) -> list[dict[str, Any]]:
     """这个场景自己的运行记录，走索引查，不扫 storage 目录。"""
     return core.scenario_runs(name, limit)
 
 
-@app.get("/api/scenarios/{name}/expect")
+@app.get("/api/scenarios/{name:path}/expect")
 def api_get_expect(name: str, skill: str | None = None) -> dict[str, Any]:
     try:
         return load_expect(_skill(skill).scenario(name))
@@ -300,7 +376,7 @@ def api_get_expect(name: str, skill: str | None = None) -> dict[str, Any]:
         raise HTTPException(404, str(e)) from e
 
 
-@app.get("/api/scenarios/{name}/context")
+@app.get("/api/scenarios/{name:path}/context")
 def api_context_vars(name: str, skill: str | None = None) -> dict[str, Any]:
     """验收路线里那些 `context.xxx` 分别是什么、上次的真实取值是多少。
 
@@ -310,7 +386,7 @@ def api_context_vars(name: str, skill: str | None = None) -> dict[str, Any]:
     return describe_context(scenario, core.settings.knowledge_dir / "facts")
 
 
-@app.put("/api/scenarios/{name}/expect")
+@app.put("/api/scenarios/{name:path}/expect")
 def api_put_expect(name: str, req: ExpectRequest) -> dict[str, Any]:
     try:
         scenario = _skill(req.skill).scenario(name)
@@ -321,7 +397,7 @@ def api_put_expect(name: str, req: ExpectRequest) -> dict[str, Any]:
         raise HTTPException(400, str(e)) from e
 
 
-@app.get("/api/scenarios/{name}/playbook")
+@app.get("/api/scenarios/{name:path}/playbook")
 def api_get_playbook(name: str, skill: str | None = None) -> dict[str, Any]:
     try:
         return load_playbook(_skill(skill).scenario(name))
@@ -329,7 +405,7 @@ def api_get_playbook(name: str, skill: str | None = None) -> dict[str, Any]:
         raise HTTPException(404, str(e)) from e
 
 
-@app.put("/api/scenarios/{name}/playbook")
+@app.put("/api/scenarios/{name:path}/playbook")
 def api_put_playbook(name: str, req: PlaybookRequest) -> dict[str, Any]:
     """结构化存（steps）或原样存（raw）。解析不了的路书只能走 raw，不然会被改坏。"""
     try:
@@ -351,7 +427,7 @@ def api_intent_spec() -> list[dict[str, Any]]:
     return intent_spec()
 
 
-@app.get("/api/scenarios/{name}/intent")
+@app.get("/api/scenarios/{name:path}/intent")
 def api_get_intent(name: str, skill: str | None = None) -> dict[str, Any]:
     try:
         return load_intent(_skill(skill).scenario(name))
@@ -359,7 +435,7 @@ def api_get_intent(name: str, skill: str | None = None) -> dict[str, Any]:
         raise HTTPException(404, str(e)) from e
 
 
-@app.put("/api/scenarios/{name}/intent")
+@app.put("/api/scenarios/{name:path}/intent")
 def api_put_intent(name: str, req: IntentRequest) -> dict[str, Any]:
     """按骨架存（meta/sections，校验必填小节和 description 长度），
     或对规范落地之前的老文件按纯文本原样存（raw）。"""
@@ -409,9 +485,103 @@ def api_memory_vote(cid: str, req: MemoryVoteRequest) -> dict[str, Any]:
 
 @app.get("/api/skills/{skill}/config")
 def api_skill_config(skill: str) -> dict[str, Any]:
-    """技能的环境配置原文（config/env.json）。看板拿它把 intent / 路书里
-    `environments.dev.researcher_web` 这类引用就地解释成实际值——产品经理不用去翻 json。"""
-    return _skill(skill).config()
+    """技能的环境配置，**脱敏后**的版本。看板拿它把 intent / 路书里
+    `environments.dev.researcher_web` 这类引用就地解释成实际值——产品经理不用去翻 json。
+    redis、凭据文件指针、账号、内网网关这些不出服务端：PM 的浏览器用不到它们，
+    agent 自己是用 read_resource 读原文的，不受这里影响。"""
+    return sanitize_skill_config(_skill(skill).config())
+
+
+class ConfigEntryRequest(BaseModel):
+    """从看板新增/修改一条域名类配置（如给新场景加 study_web）。只接受 http(s) 地址，
+    写进 environments.<env>.<key>；redis/凭据这类受保护键在 public_config 里硬拦。"""
+
+    env: str
+    key: str
+    value: str
+    skill: str | None = None
+
+
+def _load_skill_config(sk: Skill) -> dict[str, Any]:
+    path = sk.config_path
+    if not path.is_file():
+        return {}
+    try:
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise HTTPException(500, f"config/env.json 解析失败，先人工修复: {e}") from e
+    if not isinstance(cfg, dict):
+        raise HTTPException(500, "config/env.json 顶层不是键值结构，先人工修复")
+    return cfg
+
+
+def _write_skill_config(sk: Skill, cfg: dict[str, Any]) -> None:
+    path = sk.config_path
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+@app.post("/api/skills/{skill}/config/entries")
+def api_put_config_entry(skill: str, req: ConfigEntryRequest) -> dict[str, Any]:
+    sk = _skill(req.skill or skill)
+    cfg = _load_skill_config(sk)
+    known_envs = sorted((cfg.get("environments") or {}).keys())
+    if (err := validate_entry(req.env, req.key, req.value, known_envs=known_envs)) is not None:
+        raise HTTPException(400, err)
+    envs = cfg.setdefault("environments", {})
+    entries = envs.setdefault(req.env, {})
+    if not isinstance(entries, dict):
+        raise HTTPException(400, f"environments.{req.env} 不是键值结构，先人工修复")
+    entries[req.key] = req.value
+    _write_skill_config(sk, cfg)
+    return {"ok": True, "config": sanitize_skill_config(cfg)}
+
+
+@app.delete("/api/skills/{skill}/config/entries/{env}/{key}")
+def api_del_config_entry(skill: str, env: str, key: str) -> dict[str, Any]:
+    # 删除和写入走同一套校验——受保护键（prod 的 protected_user_ids 是清理脚本的护栏，
+    # 删了护栏就静默失效）和内置键（场景可能正引用）都不能从看板动。
+    sk = _skill(skill)
+    cfg = _load_skill_config(sk)
+    known_envs = sorted((cfg.get("environments") or {}).keys())
+    if (err := validate_entry(env, key, "https://placeholder.invalid", known_envs=known_envs)) is not None:
+        raise HTTPException(400, err)
+    entries = (cfg.get("environments") or {}).get(env)
+    if not isinstance(entries, dict) or key not in entries:
+        raise HTTPException(404, f"environments.{env}.{key} 不存在")
+    used_by = []
+    for sc in sk.scenarios():
+        for fname in ("intent.md", "expect.yaml"):
+            fpath = sc.dir / fname
+            if fpath.exists() and re.search(
+                    rf"(environments\.[A-Za-z0-9_.-]+\.)?{re.escape(key)}\b",
+                    fpath.read_text(encoding='utf-8', errors='replace')):
+                used_by.append(sc.name)
+                break
+    if used_by:
+        raise HTTPException(409, f"{key!r} 正被这些场景引用：{'、'.join(used_by)}；先改场景再删")
+
+    del entries[key]
+    _write_skill_config(sk, cfg)
+    return {"ok": True, "config": sanitize_skill_config(cfg)}
+
+
+@app.get("/api/meta")
+def api_meta() -> dict[str, Any]:
+    """看板自己的开关面：prod 围栏状态等。前端据此置灰 prod 选项。"""
+    return {"allow_prod": core.settings.allow_prod}
+
+
+@app.get("/api/health")
+def api_health() -> dict[str, Any]:
+    """把 Doctor 的快速检查搬进看板：顶栏的状态点用它。不查被测靶子和历史产物
+    （那是 `qa check` 的活，慢），只查这个进程自己能不能干活。"""
+    doctor = Doctor(core.settings)
+    flat = [c for group in (doctor.env(), doctor.gateway(), doctor.browser(), doctor.agents())
+            for c in group]
+    return {"ok": all(c.ok or c.warn for c in flat),
+            "checks": [c.__dict__ | {"mark": c.mark} for c in flat]}
 
 
 # ---- 跑批 ---------------------------------------------------------------------
@@ -421,6 +591,7 @@ def api_start(req: RunRequest) -> dict[str, str]:
     run_id = new_run_id(req.scenario)
     cancel = cancels.create(run_id)
     env = core.pick_env(skill.scenario(req.scenario), req.env)
+    _prod_fence(env)
     _spawn(run_id, lambda: core.run(skill, req.scenario, run_id=run_id, headless=req.headless,
                                     emit=_emitter(run_id), cancel=cancel, env=req.env), "启动中")
     return {"run_id": run_id, "scenario": req.scenario, "env": env}
@@ -435,6 +606,8 @@ def api_answer(rid: str, req: AnswerRequest) -> dict[str, Any]:
     skill = _skill(req.skill)
     run_id = resume_run_id(rid)
     cancel = cancels.create(run_id)
+    if (previous := core.record(rid)) is not None:
+        _prod_fence(previous.env)      # 接着跑要留在原来那个环境——原来就是 prod 的同样要过围栏
     _spawn(run_id, lambda: core.resume(skill, rid, req.answers, run_id=run_id, headless=req.headless,
                                        emit=_emitter(run_id), cancel=cancel), "接上冻结的现场…")
     return {"ok": True, "events": run_id, "run_id": run_id}

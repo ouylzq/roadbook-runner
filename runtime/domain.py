@@ -62,7 +62,7 @@ class Scenario:
     envs: tuple[str, ...] = ()
     default_env: str = ""
     title: str = ""          # intent.md 的一级标题（去掉「场景：」前缀），给人看的名字；目录名是给机器的
-    project: str = ""        # roadbook 的项目层：scenarios/<项目>/<场景>/；平铺布局为空串，看板据此分组
+    project: str = ""        # 项目分组名（scenarios/<项目>/<场景>/ 里的 <项目>）；平铺场景为空
 
     @property
     def mode(self) -> ScenarioMode:

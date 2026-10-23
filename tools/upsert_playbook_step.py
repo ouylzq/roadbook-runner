@@ -12,7 +12,7 @@ import threading
 from datetime import date
 from typing import Any
 
-from .base import Tool, ToolContext
+from .base import Tool, ToolContext, legal_scenario_name
 
 STEP = re.compile(r"(?m)^(\d+)\.\s+【参考】")
 STEPS_HEADING = "## 步骤"
@@ -26,7 +26,7 @@ def _upsert(ctx: ToolContext, args: dict[str, Any]) -> str:
     scenario = str(args["scenario"])
     if ctx.scenario and scenario != ctx.scenario:
         return f"拒绝：这次只允许写场景 {ctx.scenario}，不能写 {scenario}"
-    if not scenario or "/" in scenario or scenario.startswith("."):
+    if not legal_scenario_name(scenario):
         return f"场景名不合法: {scenario!r}"
     if ctx.playbook_step_sink:
         return ctx.playbook_step_sink(args)

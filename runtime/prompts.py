@@ -125,7 +125,7 @@ class TaskPrompts:
     def judge(self, scenario: Scenario, protocol: str, context_yaml: str,
               origin: str | None = None) -> str:
         """origin 是 runner 最后停在的站点。验收路线只写相对路径，不给这个裁判就会猜域名——
-        实测两次都先猜被测域名撞 404。拿不到时明说去 config/env.json 取，别让它猜。"""
+        实测两次都先猜默认域名撞 404。拿不到时明说去 config/env.json 取，别让它猜。"""
         return self._lib.render(
             "judge",
             scenario=scenario.name,

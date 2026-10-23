@@ -79,12 +79,12 @@ def test_authoring_prompts_carry_the_intent_contract(project_settings, skill):
 
 
 def test_judge_prompt_pins_the_origin(project_settings, skill):
-    """验收路线只写相对路径；裁判两次都先猜 dev.example.com 撞 404。
+    """验收路线只写相对路径；裁判两次都先猜 dev.example.ai 撞 404。
     有 runner 的落点就钉死域名；没有就明说去 config/env.json 取，不许猜。"""
     prompts = TaskPrompts(PromptLibrary(project_settings.prompts_dir))
     sc = skill.scenario("with-playbook")
-    pinned = prompts.judge(sc, protocol="P", context_yaml="x: 1", origin="https://app-dev.example.com")
-    assert "被测站点：https://app-dev.example.com" in pinned and "不要猜别的域名" in pinned
+    pinned = prompts.judge(sc, protocol="P", context_yaml="x: 1", origin="https://app-dev.example.ai")
+    assert "被测站点：https://app-dev.example.ai" in pinned and "不要猜别的域名" in pinned
     unknown = prompts.judge(sc, protocol="P", context_yaml="x: 1")
     assert "config/env.json" in unknown and "不要猜" in unknown
 

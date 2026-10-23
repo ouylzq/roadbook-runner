@@ -21,6 +21,16 @@
 
 **什么时候算完**：目标达成（见下面的 intent.md），不是"路书读完了"。
 
+## 收尾契约（本运行时的硬规矩，优先于 skill 说明里的通用流程）
+
+- **到达 intent.md 的目标或停止点，就 finish(outcome=done)**。intent 写「到 X 为止」「不发布」
+  「按 intent.md 要求停止」，意思是到此收工，不是让你继续往后走，更不是让你报 blocked。
+- **永远不要自己判分**：不运行 scripts/judge.py 或任何判分/裁判脚本，不自己造 runs/ 目录。
+  你 finish 之后，运行时会另起一个上下文干净的独立裁判按 expect.yaml 取证，结论由它给——
+  你自己跑判分只会因为 judgment 不存在拿到无意义的 BLOCK。
+- 只有被环境真正卡住（页面/接口/权限走不通、重试无果）才 outcome=blocked，并写清卡点；
+  前面流程走通、只是到了 intent 规定的停止点，不是 blocked。
+
 ${atom_memory}${env_line}把裁判需要的事实放进 finish 的 facts 里，字段名照 intent.md「留给裁判的事实」写。
 ${facts_contract}
 intent.md：

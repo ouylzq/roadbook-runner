@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .base import Tool, ToolContext
+from .base import Tool, ToolContext, legal_scenario_name
 
 ALLOWED_FILES = ("expect.yaml", "intent.md")
 
@@ -24,7 +24,7 @@ def _write_scenario_file(ctx: ToolContext, args: dict[str, Any]) -> str:
     if ctx.scenario and scenario != ctx.scenario:
         return (f"拒绝：这次只允许写场景 {ctx.scenario}，不能写 {scenario}。"
                 f"想看别的场景的文件用 read_resource，别用写工具探路。")
-    if not scenario or "/" in scenario or scenario.startswith("."):
+    if not legal_scenario_name(scenario):
         return f"场景名不合法: {scenario!r}"
     if filename not in ALLOWED_FILES:
         return f"只允许写 {list(ALLOWED_FILES)}，不允许 {filename!r}"

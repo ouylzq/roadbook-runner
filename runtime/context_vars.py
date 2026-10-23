@@ -27,7 +27,8 @@ MAX_VALUE_CHARS = 200
 
 def _facts(facts_dir: Path, scenario: str) -> tuple[dict[str, Any], str]:
     """上一次跑批留下的事实 + 它是哪一次跑的。文件不存在或坏了都只当「没有」。"""
-    path = facts_dir / f"{scenario}.yaml"
+    from .knowledge import safe_stem
+    path = facts_dir / f"{safe_stem(scenario)}.yaml"
     if not path.exists():
         return {}, ""
     text = path.read_text(encoding="utf-8")

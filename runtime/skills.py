@@ -27,6 +27,7 @@ URL_RE = re.compile(r"https?://[^\s`'\"<>)]+")
 TITLE_RE = re.compile(r"^# (.+?)\s*$", re.M)
 TITLE_PREFIX = re.compile(r"^(场景|Scenario)\s*[:：]\s*")
 CONFIG_FILE = "config/env.json"     # 场景里 `environments.<env>.xxx` 这类引用指的就是它
+INTENT_FILE = "intent.md"           # 有它的目录才算场景；项目分组目录（scenarios/<项目>/）没有它
 
 
 def parse_frontmatter(text: str) -> dict:
@@ -77,7 +78,7 @@ class Skill:
     def config(self) -> dict:
         """技能的环境配置（域名、账号、环境分组）。没有或坏了都当空——它只给看板做解释用，
         不进任何提示词；agent 自己是用 read_resource 读原文的。"""
-        path = self.root / CONFIG_FILE
+        path = self.config_path
         if not path.is_file():
             return {}
         try:
@@ -85,6 +86,10 @@ class Skill:
         except (OSError, ValueError):
             return {}
         return data if isinstance(data, dict) else {}
+
+    @property
+    def config_path(self) -> Path:
+        return self.root / CONFIG_FILE
 
     def brief(self) -> str:
         """给系统提示词用的技能说明：指令全文 + 资源目录。"""
@@ -104,20 +109,33 @@ class Skill:
         return self.root / "scenarios"
 
     def scenarios(self) -> list[Scenario]:
+        """两层发现：`scenarios/<场景>/`（平铺）和 `scenarios/<项目>/<场景>/`（分组）都认，
+        与开源版 roadbook `scripts/scenarios.py` 的 discover() 同一语义。
+        只有带 intent.md 的目录才算场景——空壳目录、项目分组目录本身都不生成卡片。
+        场景名 = 相对 scenarios/ 的路径（嵌套是 `<项目>/<场景>`），保证全技能唯一。"""
         if not self.scenarios_dir.is_dir():
             return []
-        # 布局两认：scenarios/<项目>/<场景>/（roadbook 的项目层，一对多）和旧式平铺
-        # scenarios/<场景>/。项目只是分组，场景目录名仍然唯一。
         out: list[Scenario] = []
-        for child in sorted(self.scenarios_dir.iterdir()):
-            if not child.is_dir() or child.name.startswith("."):
+        for d in sorted(self.scenarios_dir.iterdir()):
+            if not d.is_dir() or d.name.startswith("."):
                 continue
-            if (child / "intent.md").exists():
-                out.append(self._scenario(child))
+            if (d / INTENT_FILE).is_file():
+                out.append(self._scenario(d))
                 continue
-            out.extend(self._scenario(d) for d in sorted(child.iterdir())
-                       if d.is_dir() and not d.name.startswith(".")
-                       and (d / "intent.md").exists())
+            for child in sorted(d.iterdir()):
+                if child.is_dir() and not child.name.startswith(".") and (child / INTENT_FILE).is_file():
+                    out.append(self._scenario(child))
+        return out
+
+    def project_groups(self) -> list[str]:
+        """scenarios/ 下的项目分组目录名——**含还没有场景的空分组**（如 定量/）。
+        自己带 intent.md 的目录是场景不是分组（如 search-first-result/），不算。"""
+        if not self.scenarios_dir.is_dir():
+            return []
+        out = []
+        for d in sorted(self.scenarios_dir.iterdir()):
+            if d.is_dir() and not d.name.startswith(".") and not (d / INTENT_FILE).is_file():
+                out.append(d.name)
         return out
 
     def scenario(self, name: str) -> Scenario:
@@ -127,20 +145,12 @@ class Skill:
         except ValueError:
             raise FileNotFoundError(f"场景名越界: {name}") from None
         if not directory.is_dir():
-            nested = next((sc for sc in self.scenarios() if sc.name == name), None)
-            if nested is None:
-                raise FileNotFoundError(f"技能 {self.name} 里没有场景 {name}")
-            return nested
+            raise FileNotFoundError(f"技能 {self.name} 里没有场景 {name}")
         return self._scenario(directory)
 
     def _scenario(self, directory: Path) -> Scenario:
-        intent_path = directory / "intent.md"
+        intent_path = directory / INTENT_FILE
         intent = intent_path.read_text(encoding="utf-8") if intent_path.exists() else ""
-        # 项目层：场景在 scenarios/ 的子目录里（scenarios/<项目>/<场景>/）就算分了组；
-        # 直接躺在 scenarios/ 下的是旧式平铺，project 留空。
-        project = ""
-        if directory.parent != self.scenarios_dir:
-            project = directory.parent.name
         urls = URL_RE.findall(intent)
         meta = parse_frontmatter(intent)
         envs = tuple(str(e).strip() for e in (meta.get("envs") or []) if str(e).strip())
@@ -150,17 +160,19 @@ class Skill:
             envs = (default_env, *envs)
         title_m = TITLE_RE.search(intent)
         title = TITLE_PREFIX.sub("", title_m.group(1).strip()) if title_m else ""
+        rel = directory.resolve().relative_to(self.scenarios_dir.resolve())
+        name = "/".join(rel.parts)
         return Scenario(
-            name=directory.name,
+            name=name,
             title=title,
             description=str(meta.get("description", "")),
             dir=directory,
             has_playbook=(directory / "playbook.md").exists(),
             has_expect=(directory / "expect.yaml").exists(),
             start_url=urls[0] if urls else None,
-            project=project,
             envs=envs,
             default_env=default_env or (envs[0] if envs else ""),
+            project=rel.parts[0] if len(rel.parts) > 1 else "",
         )
 
 

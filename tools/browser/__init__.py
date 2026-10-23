@@ -12,6 +12,7 @@ from .grep_page import GREP_PAGE_TOOL
 from .navigate import NAVIGATE_TOOL
 from .observe import OBSERVE_TOOL
 from .scroll import SCROLL_TOOL
+from .set_files import SET_FILES_TOOL
 from .type_text import TYPE_TEXT_TOOL
 from .wait import WAIT_TOOL
 
@@ -26,6 +27,7 @@ BROWSER_TOOLS = [
     WAIT_TOOL,         # 动作：等待
     SCROLL_TOOL,       # 动作：滚动
     CLICK_XY_TOOL,     # 动作：按坐标点击（退守）
+    SET_FILES_TOOL,    # 动作：本地文件装进文件输入框（字节不过模型）
 ]
 
 __all__ = ["BROWSER_TOOLS", "NO_BROWSER", "Browser", "Observation"]

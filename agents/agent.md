@@ -1,8 +1,13 @@
 ---
 name: agent
 description: AI Native QA agent——理解业务目标，照路书执行或自己探索，用可复核的证据验证结果，沉淀成可复用的资产。
-tools: [observe, navigate, click, type_text, find, grep_page, eval_js, wait, scroll, click_xy, read_resource, run_skill_script, write_scenario_file, upsert_playbook_step, propose_atom, vote_atom, finish]
+tools: [observe, navigate, click, type_text, find, grep_page, eval_js, wait, scroll, click_xy, set_files, read_resource, run_skill_script, write_scenario_file, upsert_playbook_step, propose_atom, vote_atom, finish]
 max_iterations: 0
+# runner 是调模型的绝对大头（一次跑批 100+ 次调用、7M+ prompt token），延迟和单价按倍数放大。
+# 2026-10-19 实测（111K token 真实规模 prompt）：haiku-5-5 5.1s/次 vs sonnet-5 7.2s/次；
+# 单价 $0.10/$0.50（缓存读 $0.01/M）vs $2/$10（缓存读 $0.20/M），单次跑批成本差约 20 倍。
+# 同属 Claude 工具调用家族，格式风险最低。裁判不写 model：默认全局 sonnet-5，取证质量优先。
+model: bedrock/claude-haiku-5-5
 ---
 
 你是一个 AI Native QA Agent。不生成固定脚本、不依赖坐标或 CSS selector——理解业务目标，在真实浏览器里操作，用可复核的证据判断结果。

@@ -272,6 +272,25 @@ class Browser:
         self.page.wait_for_timeout(ACTION_SETTLE_MS)
         return f"已给 {ref} 赋值 {value!r}"
 
+    def set_files(self, ref: str | None, selector: str | None, paths: list[str]) -> str:
+        """把本地文件直接装进文件输入框（Playwright 原生 setInputFiles）。
+
+        字节走 Playwright 不走模型输出——LLM 手抄 base64 会损坏（2026-10-22 实测两次转抄
+        全坏），长文件还会撞单次输出上限。这是文件注入的唯一正规路径，base64 手抄降级为退守。
+        隐藏的 input[type=file] 不进观察、拿不到 ref，所以也接受 CSS 选择器（取第一个匹配——
+        onboarding 页有 3 个隐藏文件输入框，第一个即正主）。
+        """
+        if ref:
+            locator = self.page.locator(_ref_selector(ref))
+        elif selector:
+            locator = self.page.locator(selector).first
+        else:
+            raise ValueError("set_files 需要 ref 或 selector 其一")
+        locator.set_input_files(paths, timeout=CLICK_TIMEOUT_MS)
+        self.page.wait_for_timeout(ACTION_SETTLE_MS)
+        names = "、".join(p.rsplit("/", 1)[-1] for p in paths)
+        return f"已把 {len(paths)} 个文件装进 {'ref ' + ref if ref else selector}：{names}"
+
     def find(self, query: str) -> str:
         hits = self.page.evaluate(FIND_JS, query)
         if not hits:

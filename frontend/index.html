@@ -128,17 +128,19 @@
   .goodbad td{padding:4px 8px;border-top:1px dashed var(--line);vertical-align:top;line-height:1.55;color:var(--ink)}
   .goodbad td span{display:block;color:var(--muted);font-size:11px}
 
+  .hist-t{width:100%;border-collapse:collapse;font-size:12.5px}
+  .hist-t th{text-align:left;font-weight:600;padding:5px 8px;background:var(--bg);color:var(--muted);font-size:11.5px}
+  .hist-t td{padding:6px 8px;border-top:1px dashed var(--line);vertical-align:middle}
+  .hist-t .hrow{cursor:pointer}
+  .hist-t .hrow:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+  .hist-t .go{color:var(--accent);white-space:nowrap}
+  .hist-t .mono{font-family:var(--mono);color:var(--muted);white-space:nowrap}
+
   .grid{display:grid;gap:18px;
         grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
-  .proj-head{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;
-             margin-top:8px;padding-bottom:6px;border-bottom:1px solid var(--line);
-             font:600 14px/1.4 var(--sans,system-ui);color:var(--ink)}
-  .proj-head:first-child{margin-top:0}
-  .proj-head .proj-n{font:400 11.5px var(--mono,monospace);color:var(--muted)}
-  .proj-head .proj-name{font-weight:600}
-  .proj-head .ghost{padding:2px 10px;font-size:11px}
-  .proj-head .sp{flex:1}
-  .proj-toggle{background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;line-height:1}
+  .group-head{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;
+              margin-top:6px;font:600 13px/1.4 inherit;color:var(--muted)}
+  .group-head::after{content:"";flex:1;border-top:1px solid var(--line)}
   main{max-width:1500px;margin:0 auto;padding:18px 26px 40px}
 
   .tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;
@@ -366,78 +368,35 @@
              border-color:color-mix(in srgb,var(--block) 38%,transparent);color:var(--ink)}
   .owner.bot b{color:var(--block)}
 
-  /* 裁判答卷：先扫步骤结论，再逐条对照「要求 / 证据 / 原因」。 */
-  .jg{display:grid;gap:18px}
-  .jg-overview{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:10px;
-               background:var(--surface)}
-  .jg-overview-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .jg-overview-title{font-size:14px;font-weight:700;margin-right:auto}
-  .jg-totals{display:flex;gap:7px;flex-wrap:wrap}
-  .jg-total{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:6px;
-            background:var(--surface-2);font-size:11.5px;color:var(--muted)}
-  .jg-total b{font:700 12px var(--mono);color:var(--ink)}
-  .jg-total.pass b{color:var(--pass)} .jg-total.fail b{color:var(--fail)}
-  .jg-total.blocked b{color:var(--block)}
-  .jg-nav{display:flex;gap:7px;flex-wrap:wrap}
-  .jg-nav a{--jg-status:var(--muted);display:inline-flex;align-items:center;gap:6px;padding:5px 9px;
-            border:1px solid color-mix(in srgb,var(--jg-status) 36%,var(--line));border-radius:999px;
-            background:color-mix(in srgb,var(--jg-status) 7%,var(--surface));color:var(--ink);
-            font-size:11.5px;text-decoration:none}
-  .jg-nav a::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--jg-status)}
-  .jg-nav a.pass{--jg-status:var(--pass)} .jg-nav a.fail{--jg-status:var(--fail)}
-  .jg-nav a.blocked{--jg-status:var(--block)}
-
-  .jg-step{--jg-status:var(--muted);border:1px solid color-mix(in srgb,var(--jg-status) 34%,var(--line));
-           border-left:6px solid var(--jg-status);border-radius:10px;overflow:hidden;background:var(--surface);
-           box-shadow:0 2px 8px rgba(0,0,0,.07);scroll-margin-top:70px}
-  .jg-step.pass{--jg-status:var(--pass)} .jg-step.fail{--jg-status:var(--fail)}
-  .jg-step.blocked{--jg-status:var(--block)}
-  .jg-step>header{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:11px;align-items:center;
-                  padding:13px 14px;background:color-mix(in srgb,var(--jg-status) 8%,var(--surface));
-                  border-bottom:1px solid color-mix(in srgb,var(--jg-status) 22%,var(--line))}
-  .jg-no{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;flex:none;
-         border-radius:9px;background:var(--jg-status);color:#fff;font:700 15px var(--mono)}
-  .jg-step-title{min-width:0;font-size:14px;font-weight:650;line-height:1.55}
-  .jg-step-title small{display:block;margin-bottom:2px;font:10.5px var(--mono);font-weight:600;
-                       letter-spacing:.05em;text-transform:uppercase;color:var(--jg-status)}
-  .jg-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:6px;
-             background:var(--jg-status);color:#fff;font-size:11.5px;font-weight:750;white-space:nowrap}
-  .jg-status .icon{font-size:13px;line-height:1}
-  .jg-body{padding:13px 14px 15px;display:grid;gap:12px}
-  .jg-route{display:grid;grid-template-columns:86px minmax(0,1fr);gap:7px 12px;align-items:start;
-            padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);
-            font-size:12.5px;line-height:1.65}
-  .jg-route .k{font-size:11.5px;font-weight:650;color:var(--muted)}
-  .jg-route .reached{font-weight:700;color:var(--pass)}
-  .jg-route .reached.no{color:var(--fail)}
-  .jg-checks{display:grid;gap:10px}
-  .jg-check{--jg-status:var(--muted);border:1px solid color-mix(in srgb,var(--jg-status) 30%,var(--line));
-            border-left:5px solid var(--jg-status);border-radius:8px;overflow:hidden;background:var(--surface)}
-  .jg-check.pass{--jg-status:var(--pass)} .jg-check.fail{--jg-status:var(--fail)}
-  .jg-check.blocked{--jg-status:var(--block)}
-  .jg-check-head{display:flex;align-items:center;gap:9px;padding:8px 11px;
-                 background:color-mix(in srgb,var(--jg-status) 7%,var(--surface));
-                 border-bottom:1px solid color-mix(in srgb,var(--jg-status) 18%,var(--line))}
-  .jg-check-head b{font:700 11.5px var(--mono);color:var(--jg-status)}
-  .jg-check-head .sp{margin-left:auto}
-  .jg-check-head .jg-status{padding:3px 8px;font-size:10.5px}
-  .jg-row{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;padding:10px 12px;
-          font-size:12.5px;line-height:1.7;align-items:start}
-  .jg-row+.jg-row{border-top:1px dashed var(--line)}
-  .jg-row .k{font-size:11.5px;font-weight:650;color:var(--muted);padding-top:1px}
-  .jg-row.expected{background:var(--surface)}
-  .jg-row.actual{background:color-mix(in srgb,var(--jg-status) 4%,var(--surface-2))}
-  .jg-value{white-space:pre-wrap;word-break:break-word;color:var(--ink)}
-  .jg-reason{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;padding:9px 12px;
-             border-top:1px solid color-mix(in srgb,var(--jg-status) 22%,var(--line));
-             background:color-mix(in srgb,var(--jg-status) 10%,var(--surface));
-             color:var(--jg-status);font-size:12.5px;line-height:1.65}
-  .jg-reason .k{font-size:11.5px;font-weight:750}
-  @media(max-width:640px){
-    .jg-step>header{grid-template-columns:34px minmax(0,1fr)}
-    .jg-no{width:34px;height:34px}.jg-step>header>.jg-status{grid-column:2;width:fit-content}
-    .jg-route,.jg-row,.jg-reason{grid-template-columns:1fr;gap:3px}
-  }
+  /* 判定结果：把「验收路线规定的」和「这次裁判跑出来的」在视觉上彻底分开。
+     混在一起时人分不清哪句是标准、哪句是实测——两者性质完全不同。 */
+  .jg{display:grid;gap:14px;background:var(--bg);padding:14px;border-radius:10px}
+  .jg-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);align-items:center}
+  .jg-legend i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px;
+               vertical-align:-1px;border:1px solid var(--line)}
+  .jg-step{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);
+           box-shadow:0 1px 3px rgba(0,0,0,.07)}
+  .jg-step>header{display:flex;align-items:flex-start;gap:9px;padding:9px 12px 9px 10px;
+                  background:var(--surface-2);border-bottom:1px solid var(--line);
+                  border-left:3px solid var(--line);font-size:13px;line-height:1.7}
+  .jg-no{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;flex:none;
+         border-radius:999px;background:var(--accent);color:#fff;font:700 11px var(--mono);margin-top:1px}
+  .jg .lbl{display:block;font:10.5px var(--mono);color:var(--muted);margin-bottom:2px;letter-spacing:.02em}
+  .jg-body{padding:10px 12px;display:grid;gap:10px}
+  .jg-ran{display:grid;grid-template-columns:62px 1fr;gap:6px 10px;align-items:baseline;
+          font-size:12.5px;line-height:1.7;padding:8px 11px;border-radius:6px;
+          background:color-mix(in srgb,var(--accent) 7%,transparent);
+          border-left:3px solid color-mix(in srgb,var(--accent) 45%,transparent)}
+  .jg-ran .k{font:11.5px var(--mono);color:var(--muted)}
+  .jg-check{border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .jg-spec{padding:9px 11px;background:var(--surface-2);font-size:13px;line-height:1.75;
+           border-left:3px solid var(--line)}
+  .jg-got{padding:9px 11px;display:grid;gap:7px;font-size:12.5px;line-height:1.7;
+          border-left:3px solid color-mix(in srgb,var(--accent) 45%,transparent)}
+  .jg-evi{white-space:pre-wrap;word-break:break-word;color:var(--ink);font-size:12.5px;
+          border-left:2px solid var(--accent);padding:5px 10px;background:var(--surface-2);
+          border-radius:0 4px 4px 0}
+  .jg-note{color:var(--muted);font-size:12px}
   .res{font-weight:700;padding:1px 7px;border-radius:3px;font-size:11.5px;white-space:nowrap}
   .res.pass{background:color-mix(in srgb,var(--pass) 18%,transparent);color:var(--pass)}
   .res.fail{background:color-mix(in srgb,var(--fail) 18%,transparent);color:var(--fail)}
@@ -530,21 +489,6 @@
         box-shadow:0 3px 10px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .12s}
   .cvar:hover::after{opacity:1}
   .cvar.unknown{color:var(--block);background:color-mix(in srgb,var(--block) 12%,transparent)}
-  /* 引用了 intent.md 没声明的变量：这是 runner 不一定交、裁判取不到就判 BLOCK 的东西，
-     不能只藏在顶上那张收起来的总表里——就地标出来才有人会去补。 */
-  .cvar.undecl{color:var(--block);background:color-mix(in srgb,var(--block) 12%,transparent);
-        border-bottom-style:solid;border-bottom-color:var(--block)}
-  /* 编辑态：把「有哪些变量可以引」摆出来，人不用靠记忆敲名字 */
-  .cvpick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0 2px;
-        padding:7px 9px;border:1px dashed var(--line);border-radius:6px;background:var(--surface-2)}
-  .cvpick>span{font-size:11.5px;color:var(--muted)}
-  .cvpick em{font-size:11px;color:var(--muted);font-style:normal;flex-basis:100%}
-  .cvchip{font:11.5px/1.6 var(--mono);padding:1px 7px;border-radius:4px;cursor:pointer;
-        background:color-mix(in srgb,var(--asset) 12%,transparent);color:var(--asset);
-        border:1px solid color-mix(in srgb,var(--asset) 35%,transparent)}
-  .cvchip:hover{background:color-mix(in srgb,var(--asset) 22%,transparent)}
-  .cvchip.undecl{background:transparent;color:var(--block);border-style:dashed;
-        border-color:color-mix(in srgb,var(--block) 45%,transparent)}
   .cvar.cfg{color:var(--accent);background:var(--surface-2);border-bottom-color:var(--accent)}
   .cvar.cfg::after{white-space:pre-wrap;max-width:min(560px,80vw)}
   /* 技术细节折叠组 + 环境表 */
@@ -558,6 +502,10 @@
   .techgroup>summary em{font-style:normal;margin-left:auto;font-size:11.5px}
   .techgroup .techbody{display:grid;gap:14px;padding:0 14px 14px}
   .techgroup[open]>summary{border-bottom:1px dashed var(--line);margin-bottom:12px}
+  .cfgtab{background:var(--bg);border:1px dashed var(--line);border-radius:8px;
+          padding:10px 12px;opacity:.82}
+  .cfgtab .cfg-badge{display:inline-block;margin-bottom:6px;padding:1px 8px;border:1px solid var(--line);
+          border-radius:999px;font-size:10.5px;color:var(--muted)}
   .cfgtab table{width:100%;border-collapse:collapse;font-size:12px}
   .cfgtab th{text-align:left;padding:4px 8px;background:var(--surface-2);font-weight:600;font-size:11.5px}
   .cfgtab th small{font-weight:400;color:var(--muted);margin-left:4px}
@@ -719,6 +667,24 @@
   .vnote{margin-top:4px;font-size:11.5px;color:var(--muted)}
   .vgoal{font-size:13px;padding:9px 12px;background:var(--surface-2);border-radius:6px;
          margin-bottom:10px;line-height:1.5}
+
+  .au-foot{flex-wrap:wrap;gap:8px 14px}
+  #author-save-draft{margin-left:-6px}
+  #author-status{flex:1 1 100%;min-height:1.6em}
+  .draft-menu{position:absolute;right:56px;top:100%;z-index:5;width:320px;max-width:calc(100% - 24px);max-height:320px;overflow:auto;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 0;
+    box-shadow:0 6px 20px rgba(0,0,0,.18)}
+  .draft-row{display:grid;grid-template-columns:1fr auto auto auto;gap:2px 8px;align-items:center;
+    padding:6px 12px;cursor:pointer}
+  .draft-row:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+  .draft-row .n{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .draft-row .t{font:11px var(--mono);color:var(--muted)}
+  .draft-row .p{grid-column:1/-1;font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .draft-row .x{background:none;border:none;color:var(--muted);padding:0 2px;cursor:pointer}
+  .draft-row .x:hover{color:var(--accent)}
+  .draft-foot{padding:6px 12px 2px;border-top:1px dashed var(--line);margin-top:4px}
+  @keyframes draftPing{0%{color:var(--accent)}100%{color:var(--muted)}}
+  #draft-open.ping{animation:draftPing .6s ease-out}
 </style>
 </head>
 <body>
@@ -730,11 +696,14 @@
   <div class="titles"><h1>Roadbook Runner</h1>
     <span class="sub">用大白话说清要验什么，机器自己去点，独立裁判给结论</span></div>
   <span class="spacer"></span>
+  <span id="health-dot" title="自检中…"
+        style="width:9px;height:9px;border-radius:50%;background:#cbd5e1;display:inline-block"></span>
   <button class="link" id="onboard-btn" onclick="toggleOnboard()">第一次用？</button>
+  <button class="ghost" onclick="openHistory()">历史</button>
+  <button class="ghost" onclick="openGlobalCfg()">环境配置</button>
   <button class="ghost" onclick="openMemory()">记忆<span class="cnt" id="mem-count" hidden></span></button>
   <button class="ghost" onclick="runAll()">全部跑一遍</button>
-  <button class="ghost" onclick="newProject()">＋ 新建项目</button>
-  <button class="primary" onclick="openAuthor()">＋ 新建场景</button>
+  <button class="primary" data-role="author-new" onclick="openAuthor()">＋ 新建场景</button>
 </header>
 
 <!-- 上手三步 + 结论怎么读。默认收起，第一次打开页面自动展开一次，关掉就记住 -->
@@ -753,6 +722,29 @@
   <div class="overview" id="overview"></div>
   <div class="grid" id="grid"><div class="empty">加载中…</div></div>
 </main>
+
+<dialog id="cfgdlg"><div class="dlg-head">
+    <b style="font-size:14px">环境配置（全局 · 所有场景共用）</b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="renderGlobalCfg()">刷新</button>
+    <button class="ghost" onclick="document.querySelector('#cfgdlg').close()">关闭</button>
+  </div><div class="dlg-body" id="global-cfg" style="min-width:560px">
+    <span class="hint">读取中…</span>
+  </div></dialog>
+
+<dialog id="hist"><div class="dlg-head">
+    <b style="font-size:14px">历史 · 全部跑批</b>
+    <span style="margin-left:auto"></span>
+    <select id="hist-filter" onchange="renderHistory()">
+      <option value="">全部结论</option>
+      <option>PASS</option><option>FAIL</option><option>BLOCK</option>
+      <option>EXPLORED</option><option>ASK</option><option>error</option><option>running</option>
+    </select>
+    <button class="ghost" onclick="renderHistory()">刷新</button>
+    <button class="ghost" onclick="document.querySelector('#hist').close()">关闭</button>
+  </div><div class="dlg-body" id="hist-body" style="min-width:640px">
+    <span class="hint">读取中…</span>
+  </div></dialog>
 
 <dialog id="ask"><div class="dlg-head">
     <b id="ask-title" style="font-family:var(--mono);font-size:13px"></b>
@@ -783,6 +775,7 @@
     <div class="pane" data-pbpane="intent"><div id="pb-intentbox"></div></div>
     <div class="pane" data-pbpane="expect" hidden><div id="pb-expectbox"></div></div>
     <div class="pane" data-pbpane="playbook" hidden><div id="pb-playbook"></div></div>
+    <div class="hint" style="margin-top:12px">环境与账号是全局配置（<a href="#" onclick="openGlobalCfg();return false">查看 / 新增</a>），场景里用 <code>environments.&lt;env&gt;.键名</code> 引用。</div>
   </div>
 </dialog>
 
@@ -801,9 +794,11 @@
     <button class="ghost" onclick="document.querySelector('#memdlg').close()">关闭</button>
   </div><div class="dlg-body" id="mem-body"></div></dialog>
 
-<dialog id="author"><div class="dlg-head">
+<dialog id="author"><div class="dlg-head" style="position:relative">
     <b id="author-title" style="font-size:14px">新建场景</b>
     <span style="margin-left:auto"></span>
+    <button class="link sm" id="draft-open" hidden onclick="toggleDraftMenu(event)">草稿箱 <span id="draft-count"></span> ▾</button>
+    <div id="draft-menu" class="draft-menu" hidden><div id="draft-list"></div><div class="hint draft-foot">点一条载入到表单 · 最多留 20 条 · 只存本机浏览器</div></div>
     <button class="ghost" onclick="document.querySelector('#author').close()">关闭</button>
   </div><div class="dlg-body author">
     <p class="au-intro" id="author-hint"></p>
@@ -822,17 +817,19 @@
           <tr><td>页面出现「保存成功」</td><td>按钮变蓝了<span>颜色读不到，只认页面上的文字</span></td></tr>
           <tr><td>项目卡片上的名字等于刚填的那个</td><td>看起来没问题<span>没有可核对的东西</span></td></tr>
         </table></details>
-      <details id="author-cfg-wrap"><summary>可用的环境和账号<small>写「用测试账号登录」就行，具体是哪个看这里</small></summary>
-        <div id="author-cfg"></div></details>
+      <div class="hint" id="author-cfg" style="margin-top:9px">环境和账号是全局配置（所有场景共用），<a href="#" onclick="openGlobalCfg();return false">点这里查看/新增</a>——加好后场景里写 <code>environments.&lt;env&gt;.键名</code> 就能引用。</div>
+      <div id="author-match" hidden style="margin-top:9px"></div>
+      <details id="author-proj-field" open><summary>所属项目<small>场景会建在 scenarios/&lt;项目&gt;/ 下</small></summary>
+        <select id="author-project" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit"></select></details>
+      <details id="author-name-field"><summary>场景名<small>留空自动起名；建议起一个，跑批历史和列表里好认</small></summary>
+        <input type="text" id="author-name" placeholder="如 regression-smoke（小写字母/数字/连字符）"/></details>
       <details id="author-url-field"><summary>被测页面地址<small>不填就用这个技能默认的</small></summary>
         <input type="text" id="author-url" placeholder="http://localhost:4173/"/></details>
-      <details id="author-proj-field"><summary>放进哪个项目<small>项目 = 被测对象，scenarios/ 下的分组文件夹</small></summary>
-        <select id="author-proj"></select></details>
     </div>
 
     <div class="au-foot">
       <button id="author-go" onclick="submitAuthor()">生成</button>
-      <label class="au-run"><input type="checkbox" id="author-run" checked/>生成完直接跑一次</label>
+      <button class="ghost" id="author-save-draft" onclick="saveNamedDraft()" title="⌘S" hidden>存为草稿</button>
       <span class="hint" id="author-status"></span>
     </div>
     <div class="authlog" id="author-log"></div>
@@ -869,75 +866,29 @@ const $ = s => document.querySelector(s);
 const dlg = $('#dlg');
 let state = [];                 // 场景列表
 const running = {};             // scenario -> {run_id, step}
-let PROJECTS = {};              // skill -> [项目名]，含空项目；移动/新建场景的下拉来源
-const COLLAPSED = new Set(JSON.parse(localStorage.getItem('proj-collapsed') || '[]'));
+let ALLOW_PROD = false;         // 服务端围栏的镜像，只管把不该有的选项藏起来；真闸门在 /api/runs
 
 async function load(){
   const skills = await (await fetch('/api/skills')).json();
   state = skills.flatMap(sk => sk.scenarios.map(s => ({...s, skill: sk.name})));
-  PROJECTS = Object.fromEntries(skills.map(sk => [sk.name, sk.projects || []]));
+  SKILL_PROJECTS = [...new Set(skills.flatMap(sk => sk.projects || []))];
   render();
   reattachRunning();
   refreshMemoryCount();
+  // 围栏与自检都失败了也不影响主界面——这只是体验层
+  fetch('/api/meta').then(r => r.json()).then(m => { ALLOW_PROD = !!m.allow_prod; render(); }).catch(() => {});
+  fetch('/api/health').then(r => r.json()).then(renderHealth).catch(() => {});
 }
 
-// ---- 项目管理：新建 / 改名 / 删空项目 / 场景在项目间移动 / 分组折叠 ----
-function firstSkill(){ return state[0]?.skill; }
-
-async function newProject(){
-  const skill = firstSkill();
-  if(!skill){ alert('没找到技能目录'); return; }
-  const name = prompt('新项目名 = 被测对象的名字（比如 my-app）。场景建在它下面。');
-  if(!name) return;
-  const r = await fetch('/api/projects', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({skill, name: name.trim()})});
-  if(!r.ok){ alert((await r.json()).detail || '创建失败'); return; }
-  await load();
-}
-
-async function renameProj(proj, skill){
-  const to = prompt(`把项目 ${proj} 改名为：`, proj);
-  if(!to || to === proj) return;
-  const r = await fetch('/api/projects/rename', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({skill, name: proj, to: to.trim()})});
-  if(!r.ok){ alert((await r.json()).detail || '改名失败'); return; }
-  COLLAPSED.delete(proj);
-  await load();
-}
-
-async function deleteProj(proj, skill){
-  if(!confirm(`删除项目 ${proj}？只有空项目能删；里面还有场景会被拒绝。`)) return;
-  const r = await fetch(`/api/projects/${encodeURIComponent(proj)}?skill=${encodeURIComponent(skill)}`, {method:'DELETE'});
-  if(!r.ok){ alert((await r.json()).detail || '删除失败'); return; }
-  COLLAPSED.delete(proj);
-  await load();
-}
-
-async function moveScenario(name, project, skill){
-  if(!project) return;
-  const to = project === '~root~' ? '' : project;
-  if(to && !confirm(`把场景 ${name} 移到项目 ${to}？`)){ render(); return; }
-  const r = await fetch(`/api/scenarios/${encodeURIComponent(name)}/move`,
-    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({skill, project: to})});
-  if(!r.ok){ alert((await r.json()).detail || '移动失败'); }
-  await load();
-}
-
-function toggleProj(proj){
-  COLLAPSED.has(proj) ? COLLAPSED.delete(proj) : COLLAPSED.add(proj);
-  localStorage.setItem('proj-collapsed', JSON.stringify([...COLLAPSED]));
-  render();
-}
-
-// 卡片上的「移动到…」下拉：列出其它项目 + 移出分组。当前无处可去时不渲染。
-function projMovePicker(s, running_){
-  const projects = PROJECTS[s.skill] || [];
-  const others = projects.filter(p => p !== (s.project || ''));
-  const toRoot = s.project ? [`<option value="~root~">（移出项目，不分组）</option>`] : [];
-  if(!others.length && !toRoot.length) return '';
-  return `<select class="envsel" title="移动到别的项目" ${running_?'disabled':''}
-      onchange="moveScenario('${esc(s.name)}', this.value, '${esc(s.skill)}')">
-    <option value="">移动到…</option>${toRoot.join('')}${others.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select>`;
+// 顶栏状态点：绿=自检全过，黄=有告警，红=有硬失败。悬停看每一条。
+function renderHealth(h){
+  const dot = $('#health-dot');
+  const bad = (h.checks || []).filter(c => !c.ok && !c.warn);
+  const warn = (h.checks || []).filter(c => !c.ok && c.warn);
+  const color = bad.length ? '#dc2626' : (warn.length ? '#d97706' : '#16a34a');
+  dot.style.background = color;
+  dot.title = `自检 ${h.ok ? '通过' : '有问题'}\n` + (h.checks || [])
+    .map(c => `${c.mark} ${c.title} ${c.detail || ''}`).join('\n');
 }
 
 // 服务端说还在跑、本页却没盯着它 —— 接回去。
@@ -1014,22 +965,7 @@ function render(){
     }).join('')}</div>` : '';
 
   const shown = state.filter(s => FILTER === 'all' || bucketOf(s) === FILTER);
-  // 项目分组（roadbook scenarios/<项目>/<场景>/）。'' 是平铺未分组，不渲染组头，看板和从前一样。
-  const byProj = new Map();
-  for(const s of shown){
-    const k = s.project || '';
-    if(!byProj.has(k)) byProj.set(k, []);
-    byProj.get(k).push(s);
-  }
-  const main = [...byProj.entries()].map(([proj, list]) => `
-    ${proj ? `<div class="proj-head">
-        <button class="proj-toggle" title="${COLLAPSED.has(proj)?'展开':'折叠'}" onclick="toggleProj('${esc(proj)}')">${COLLAPSED.has(proj)?'▸':'▾'}</button>
-        <span class="proj-name">${esc(proj)}</span><span class="proj-n">${list.length} 个场景</span>
-        <span class="sp"></span>
-        <button class="ghost sm" onclick="renameProj('${esc(proj)}','${esc(list[0].skill)}')">改名</button>
-        <button class="ghost sm" onclick="deleteProj('${esc(proj)}','${esc(list[0].skill)}')">删除</button>
-      </div>` : ''}
-    ${COLLAPSED.has(proj) ? '' : list.map(s => {
+  const tileHtml = s => {
     const r = running[s.name];
     const verdict = r ? 'running' : (s.last?.verdict || s.last?.status || '');
     const bucket = bucketOf(s);
@@ -1063,24 +999,24 @@ function render(){
                  ${r.stopping?'停止中…':'停止'}</button>`
             : ''}
         ${envPicker(s, r)}
-        ${projMovePicker(s, r)}
         <button class="primary sm" onclick="run('${s.name}','${s.skill}')" ${r?'disabled':''}>
           ${r?'跑着…':'跑一下'}</button>
       </div>
     </article>`;
-    }).join('')}`).join('');
-  // 空项目也要露脸：建了文件夹还没场景的（比如刚规划的定量），渲染一个空组头
-  const empties = [...new Set(Object.values(PROJECTS).flat())]
-    .filter(p => !byProj.has(p));
-  $('#grid').innerHTML = main + empties.map(p => `
-    <div class="proj-head">
-        <span class="proj-name">${esc(p)}</span><span class="proj-n">空项目，还没有场景</span>
-        <span class="sp"></span>
-        <button class="ghost sm" onclick="renameProj('${esc(p)}','${esc(firstSkill())}')">改名</button>
-        <button class="ghost sm" onclick="deleteProj('${esc(p)}','${esc(firstSkill())}')">删除</button>
-      </div>`).join('')
-   || (state.length ? `<div class="empty">这一类里没有场景。<a href="#" onclick="setFilter('all');return false">看全部</a></div>`
-                    : '<div class="empty">没找到场景，检查技能目录</div>');
+  };
+  // scenarios/<项目>/<场景>/ 来的场景按项目分节；平铺场景排最前、不单独起节。
+  const groups = [];
+  for(const s of shown){
+    const g = groups.find(g => g.project === s.project);
+    if(g) g.items.push(s); else groups.push({project: s.project, items: [s]});
+  }
+  groups.sort((a, b) => (b.project === '') - (a.project === '') || (a.project||'').localeCompare(b.project||''));
+  const needHeads = groups.length > 1 || !!(groups[0] && groups[0].project);
+  $('#grid').innerHTML = groups.map(g =>
+    (needHeads ? `<div class="group-head">${esc(g.project || '未分组')}</div>` : '') +
+    g.items.map(tileHtml).join('')
+  ).join('') || (state.length ? `<div class="empty">这一类里没有场景。<a href="#" onclick="setFilter('all');return false">看全部</a></div>`
+                               : '<div class="empty">没找到场景，检查技能目录</div>');
 }
 
 // 跑哪个环境。`envs: [dev, prod]` 这行早就写在 intent.md 的 frontmatter 里了，
@@ -1092,14 +1028,23 @@ function envPicker(s, running_){
   const envs = s.envs || [];
   if(envs.length < 2) return envs.length === 1 ? `<span class="chip env">${esc(envs[0])}</span>` : '';
   const cur = ENV_PICK[s.name] || s.default_env || envs[0];
-  return `<select class="envsel" title="跑哪个环境" ${running_?'disabled':''}
+  return `<select class="envsel" title="跑哪个环境${ALLOW_PROD ? '' : '（prod 已被服务端围栏关闭）'}" ${running_?'disabled':''}
       onchange="ENV_PICK['${s.name}']=this.value">
-    ${envs.map(e=>`<option value="${esc(e)}" ${e===cur?'selected':''}>${esc(e)}</option>`).join('')}</select>`;
+    ${envs.map(e=>{
+      const fenced = e.toLowerCase() === 'prod' && !ALLOW_PROD;
+      return `<option value="${esc(e)}" ${e===cur?'selected':''} ${fenced?'disabled':''}>${esc(e)}${fenced?'（已关）':''}</option>`;
+    }).join('')}</select>`;
 }
 
 async function run(name, skill){
   if(running[name]) return;
   const env = ENV_PICK[name] || null;
+  // prod 围栏的前端面：被服务端关掉时选项根本选不到 prod，这里再兜一道——
+  // 万一选中项默认就是 prod（场景只声明了 prod），也直接说明白，别让人以为点了没反应。
+  if(env && env.toLowerCase() === 'prod' && !ALLOW_PROD){
+    alert('prod 已被围栏关闭：看板默认不许触发线上跑批。要对线上跑，让管理员在服务端 .env 设 QA_AGENT_ALLOW_PROD=on。');
+    return;
+  }
   // 换环境要拦一下。以前打 prod 得去改 config/env.json——那是个刻意动作；
   // 现在它只是个下拉框，顺手选错就打到线上了。只在「不是这个场景的默认环境」时问。
   const sc = (state || []).find(s => s.name === name);
@@ -1108,6 +1053,7 @@ async function run(name, skill){
   const r = await (await fetch('/api/runs',{method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({scenario:name, skill, env})})).json();
+  if(r.detail){ alert('没跑起来：' + r.detail); return; }
   attach(name, r.run_id);
 }
 
@@ -1158,7 +1104,43 @@ async function stopRun(runId, name){
 }
 
 async function runAll(){
-  for(const s of state) if(!running[s.name]) { await run(s.name, s.skill); await new Promise(r=>setTimeout(r,800)); }
+  // 围栏开着时，只声明了 prod 的场景直接跳过并说明——不是悄悄漏掉
+  const skipped = [];
+  for(const s of state){
+    if(running[s.name]) continue;
+    const envs = (s.envs || []).map(e => e.toLowerCase());
+    if(!ALLOW_PROD && envs.length && envs.every(e => e === 'prod')){ skipped.push(s.name); continue; }
+    await run(s.name, s.skill);
+    await new Promise(r=>setTimeout(r,800));
+  }
+  if(skipped.length) alert(`以下 ${skipped.length} 个场景只支持 prod，被围栏跳过了：\n${skipped.join('\n')}`);
+}
+
+// ---- 历史：全部跑批一个列表。卡片上只有"每场景最后一次"，答不了"这周哪些挂了" ----
+async function openHistory(){ document.querySelector('#hist').showModal(); renderHistory(); }
+async function renderHistory(){
+  const body = $('#hist-body');
+  const f = $('#hist-filter').value;
+  const rows = await (await fetch('/api/runs?limit=100')).json();
+  const shown = rows.filter(r => !f || (r.verdict || r.status) === f);
+  if(!shown.length){ body.innerHTML = `<span class="hint">${rows.length ? '这个结论下没有跑批' : '还没有跑批记录'}</span>`; return; }
+  body.innerHTML = `<table class="hist-t"><thead><tr>
+      <th>时间</th><th>场景</th><th>环境</th><th>结论</th><th>耗时</th><th></th></tr></thead><tbody>${
+    shown.map(r => {
+      const v = r.verdict || r.status || '';
+      let dur = '';
+      if(r.started_at && r.finished_at){
+        const s = Math.round((new Date(r.finished_at) - new Date(r.started_at))/1000);
+        dur = s >= 60 ? `${Math.floor(s/60)}分${s%60}秒` : `${s}秒`;
+      }
+      return `<tr class="hrow" onclick="detail('${r.run_id}')">
+        <td class="mono">${esc((r.run_id || '').slice(0, 15))}</td>
+        <td>${esc(r.scenario || '')}${r.external ? ' <span class="hint" title="roadbook/runs/ 时代的外部记录：只有文字产物，没有轨迹和录屏">外部</span>' : ''}</td>
+        <td>${esc(r.env || '-')}</td>
+        <td><span class="pill ${esc(v)}" title="${VERDICT_HELP[v]||''}">${esc(v)}</span></td>
+        <td>${dur}</td>
+        <td class="go">看 →</td></tr>`;
+    }).join('')}</tbody></table>`;
 }
 
 // ---- 结论怎么读：卡片药丸的 title、上手面板共用一份 ----
@@ -1255,70 +1237,173 @@ const AUTHOR_EXAMPLES = [
 ];
 function openAuthor(scenario){
   authoring = scenario || null;
+  authorSeq++;                                   // 旧生成任务的 SSE 回调就此作废，别改写新表单
   $('#author-title').textContent = scenario ? `改场景 ${scenario}` : '新建场景';
   $('#author-hint').innerHTML = scenario
     ? '说清你想改什么就行，它会读现在的版本在上面改，不动无关的部分。'
     : '用大白话描述就行。机器整理成「要验什么」和「怎么算过」两份给你看；怎么点、用哪个环境账号、怎么清理都不用你写。';
   // 有哪些环境、用哪个账号——写场景的人得看得见，不然只能凭空猜
-  loadSkillCfg(state[0]?.skill).then(() => {
-    const table = cfgTableHtml();
-    $('#author-cfg').innerHTML = table;
-    $('#author-cfg-wrap').hidden = !table;
-  });
+  // 项目下拉：现有场景出现过的分组 + 不漏掉空分组；新建默认落场景最多的组
+  {
+    // 分组清单来自 scenarios/ 的真实目录（含空分组），不是从"有场景的组"推导——空组也要能选
+    const projs = [...new Set([...(SKILL_PROJECTS || []), ...state.map(s => s.project || '')])];
+    const sel = $('#author-project');
+    if(sel){
+      sel.innerHTML = projs.map(x => `<option value="${esc(x)}">${x || '未分组（顶层）'}</option>`).join('')
+        || '<option value="">未分组（顶层）</option>';
+      const biggest = projs.sort((a, b) => {
+        const n = x => state.filter(s => (s.project || '') === x).length;
+        return n(b) - n(a);
+      })[0];
+      if(biggest !== undefined) sel.value = biggest;
+    }
+    $('#author-proj-field').hidden = !!scenario;
+  }
+  loadSkillCfg(state[0]?.skill);
   $('#author-url-field').hidden = !!scenario;
   $('#author-examples').hidden = !!scenario;
   $('#author-examples').querySelectorAll('a').forEach(a => a.remove());
   for(const [label, text] of AUTHOR_EXAMPLES){
     const a = document.createElement('a'); a.href = '#'; a.textContent = label;
-    a.onclick = e => { e.preventDefault(); $('#author-ask').value = text; $('#author-ask').focus(); };
+    a.onclick = e => { e.preventDefault(); $('#author-ask').value = text; draftDirty = true; saveAuthorDraft(); updateDraftBadge(); $('#author-ask').focus(); };
     $('#author-examples').appendChild(a);
   }
-  // 项目归属：新建时可选；改场景时不挪窝，字段藏起来
-  const projField = $('#author-proj-field');
-  if(scenario){
-    projField.hidden = true;
-  }else{
-    projField.hidden = false;
-    const projects = PROJECTS[firstSkill()] || [];
-    $('#author-proj').innerHTML = `<option value="">（不分组，放根目录）</option>` +
-      projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-    $('#author-proj').value = projects[0] || '';
-  }
   document.querySelectorAll('#author .au-more details').forEach(d => d.open = false);
-  $('#author-ask').value = '';
-  $('#author-status').textContent = '';
+  $('#author-ask').value = ''; $('#author-name').value = ''; $('#author-url').value = '';
+  $('#author-status').textContent = ''; $('#author-go').disabled = false;
+  draftLoadedId = null; draftDirty = false;
+  const menu = document.getElementById('draft-menu'); if(menu) menu.hidden = true;
+  $('#author-save-draft').hidden = !!scenario;          // 改场景不提供草稿
+  document.getElementById('draft-open').hidden = !!scenario || loadNamedDrafts().length === 0;
+  if(!scenario){
+    // 恢复上次没生成出去的内容（调试时重开不丢）；改场景模式不恢复
+    const cur = authorDraftCurrent();
+    if(cur && (cur.ask || cur.name || cur.url)){
+      $('#author-ask').value = cur.ask || '';
+      $('#author-name').value = cur.name || '';
+      $('#author-url').value = cur.url || '';
+      if(cur.project){ const s = $('#author-project'); if(s && [...s.options].some(o => o.value === cur.project)) s.value = cur.project; }
+      if(cur.loaded_id && loadNamedDrafts().some(d => d.id === cur.loaded_id)) draftLoadedId = cur.loaded_id;
+      draftDirty = false;
+      $('#author-status').innerHTML = '已恢复上次没生成的内容 · <a href="#" onclick="clearAuthorForm();return false">清空</a>';
+    }
+  }
   $('#author-log').innerHTML = '';
-  $('#author-go').disabled = false;
   $('#author').showModal();
+}
+function authorSkill(){ return (state[0] && state[0].skill) || 'roadbook'; }
+async function matchNewOrigins(ask, url){
+  try{
+    return await (await fetch(`/api/skills/${encodeURIComponent(authorSkill())}/config/match`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text: ask, url})})).json();
+  }catch(e){ return {matched: [], new: []}; }
+}
+function confirmNewOrigins(newItems){
+  return new Promise(resolve => {
+    const box = $('#author-match');
+    box.hidden = false;
+    box.innerHTML = `<div class="hint" style="margin-bottom:8px">这些地址配置里还没有——确认后登记进全局配置（所有场景共用，键名可改；只登记 dev，prod 找管理员）：</div>` +
+      newItems.map((it, i) => `<div style="display:flex;gap:6px;margin:6px 0;align-items:center">
+          <span class="hint" style="flex:0 0 auto">${esc(it.origin)}</span>
+          <input data-i="${i}" value="${esc(it.suggested_key)}"
+                 style="flex:0 0 150px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit">
+        </div>`).join('') +
+      `<div style="display:flex;gap:8px;margin-top:8px">
+        <button class="primary sm" id="cfg-go">登记并生成</button>
+        <button class="ghost sm" id="cfg-skip">不登记，地址写死在场景里</button>
+      </div>`;
+    $('#cfg-go').onclick = () => {
+      const entries = [...box.querySelectorAll('input[data-i]')].map(inp => ({
+        env: 'dev', key: inp.value.trim(), value: newItems[+inp.dataset.i].origin
+      })).filter(e => /^[a-z][a-z0-9_]*$/.test(e.key));
+      resolve(entries);
+    };
+    $('#cfg-skip').onclick = () => resolve([]);
+  });
 }
 async function submitAuthor(){
   const ask = $('#author-ask').value.trim();
   if(!ask){ $('#author-status').textContent = '先写点什么'; return; }
+  const mySeq = authorSeq, wasNew = !authoring;   // 快照：回调执行时 authoring 可能已变
+  const submittedAsk = ask;
   $('#author-go').disabled = true;
-  $('#author-status').textContent = '整理中…（它会先读现有场景学格式，约一分钟）';
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    if(mySeq !== authorSeq){ clearInterval(timer); return; }
+    const s = Math.round((Date.now() - t0) / 1000);
+    $('#author-status').textContent =
+      `整理中… 已等 ${s}s（裁判标准机器会从你的描述里推，不用你写；关掉弹窗不影响生成）`;
+  }, 1000);
   $('#author-log').innerHTML = '';
   try{
-    const r = await (await fetch('/api/scenarios/author', {
+    // 生成前：扫描述和地址栏里的新域名（确定性代码，不经过模型）——
+    // 命中现有配置 → 自动用键名引用；没命中 → 确认卡，PM 点头才登记进全局配置
+    let configEntries = [];
+    try{
+      const m = await matchNewOrigins(ask, $('#author-url').value.trim() || null);
+      if((m.new||[]).length){
+        $('#author-go').disabled = false;
+        configEntries = await confirmNewOrigins(m.new);
+        $('#author-go').disabled = true;
+        for(const e of configEntries){
+          const res = await fetch(`/api/skills/${encodeURIComponent(authorSkill())}/config/entries`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({env: e.env, key: e.key, value: e.value, skill: authorSkill()})});
+          if(!res.ok){ $('#author-status').textContent = '登记失败：' + ((await res.json()).detail || res.statusText); $('#author-go').disabled = false; return; }
+        }
+        await loadSkillCfg(authorSkill());
+      }
+    }catch(e){ /* 反查失败不阻塞生成 */ }
+    // 异步提交：服务端立刻返回任务号，进度和结果走 SSE——网关抖动时弹窗不再无限"整理中"
+    const r0 = await (await fetch('/api/scenarios/author', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ask, scenario: authoring, url: $('#author-url').value.trim() || null,
-        project: authoring ? null : ($('#author-proj')?.value || null)})
+                            name: ($('#author-name')||{}).value?.trim() || null,
+                            project: ($('#author-project')||{}).value || null,
+                            config_entries: configEntries})
     })).json();
-    $('#author-status').textContent = r.ok ? '✓ 完成' : '没有产出，看下面';
-    $('#author-log').innerHTML = `
-      <div style="font-size:12.5px;margin-bottom:7px">${esc(r.summary || '')}</div>
-      ${(r.files||[]).map(f => `<div class="step"><span>✎</span>
-        <span class="t">写入</span><span class="a">${esc(f)}</span></div>`).join('')}
-      ${r.notes ? `<div class="hint" style="margin-top:8px">${esc(r.notes)}</div>` : ''}`;
-    await load();
-    // 生成完直接跑：以前这个勾选框只是画在那里，没接线
-    if(r.ok && r.scenario && $('#author-run').checked && !authoring){
-      const sc = state.find(s => s.name === r.scenario);
-      if(sc){ $('#author').close(); run(sc.name, sc.skill); }
-    }
+    await load();   // 占位卡即刻上墙（服务端在提交瞬间已落占位 intent）
+    const es = new EventSource(`/api/author/${encodeURIComponent(r0.author_id)}/events`);
+    let done = false;
+    es.onmessage = async ev => {
+      const {kind, payload} = JSON.parse(ev.data);
+      if(kind === 'phase' && mySeq === authorSeq) $('#author-status').textContent = payload;
+      if(kind !== 'done') return;
+      done = true; es.close(); clearInterval(timer);
+      if(mySeq !== authorSeq) return;               // 用户已开始下一轮，别改写新表单
+      if(payload.status === 'error'){
+        $('#author-status').textContent = '出错了：' + (payload.error || '未知') + '（没有写入任何东西，稍后再试）';
+        $('#author-go').disabled = false;
+        return;
+      }
+      const r = payload.result;
+      // 只清「本次提交的那份」自动留存：用户若已开始写下一份，新内容不能被误删
+      if(r.ok && wasNew && authorDraftCurrent()?.ask === submittedAsk) localStorage.removeItem('author-draft-current');
+      const loadedName = draftLoadedId ? (loadNamedDrafts().find(d => d.id === draftLoadedId) || {}).name : null;
+      $('#author-status').textContent = r.ok ? '✓ 完成' + (loadedName ? `（草稿「${loadedName}」仍保留在草稿箱，方便下次调试）` : '')
+                                             : '没有产出，看下面';
+      $('#author-log').innerHTML = `
+        <div style="font-size:12.5px;margin-bottom:7px">${esc(r.summary || '')}</div>
+        ${(r.files||[]).map(f => `<div class="step"><span>✎</span>
+          <span class="t">写入</span><span class="a">${esc(f)}</span></div>`).join('')}
+        ${r.notes ? `<div class="hint" style="margin-top:8px">${esc(r.notes)}</div>` : ''}`;
+      await load();
+      $('#author-go').disabled = false;
+    };
+    es.onerror = () => {
+      if(done || mySeq !== authorSeq) return;
+      // 生成仍在后台跑，只是进度流断了——不判失败，让人从场景列表确认结果
+      clearInterval(timer);
+      $('#author-status').textContent = '进度流断开了（生成仍在后台进行）——稍后在场景列表里看结果';
+      $('#author-go').disabled = false;
+      es.close();
+    };
   }catch(e){
-    $('#author-status').textContent = '出错了：' + e;
+    clearInterval(timer);
+    if(mySeq === authorSeq) $('#author-status').textContent = '出错了：' + e;
+    $('#author-go').disabled = false;
   }
-  $('#author-go').disabled = false;
 }
 
 const fmt = s => (isFinite(s) ? `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` : '0:00');
@@ -1420,19 +1505,23 @@ async function submitAnswers(){
   if(!answers.some(a => a.includes('我的回答：') && a.split('我的回答：')[1].trim())){
     $('#ask-status').textContent = '至少回答一条'; return;
   }
-  $('#ask-status').textContent = '接上了，正在继续…';
-  const r = await (await fetch(`/api/runs/${asking.rid}/answer`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({answers})})).json();
-
-  const es = new EventSource(`/api/runs/${r.events}/events`);
-  es.onmessage = ev => {
-    const {kind, payload} = JSON.parse(ev.data);
-    if(kind === 'step' || kind === 'judge_step')
-      $('#ask-status').textContent = `跑着… ${payload.n}. ${payload.tool}`;
-    if(kind === 'phase') $('#ask-status').textContent = payload;
-    if(kind === 'done'){ es.close(); $('#ask').close(); load(); }
-  };
+  $('#ask-status').textContent = '提交回答…';
+  let r;
+  try{
+    r = await (await fetch(`/api/runs/${asking.rid}/answer`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({answers})})).json();
+  }catch(e){
+    $('#ask-status').textContent = '提交失败：' + e.message + '（现场仍冻结，可直接重试）'; return;
+  }
+  // 重复提交 / 该跑已不在等回答时，服务端不给 events——如实说明，别挂一个空的 SSE 假装在跑
+  if(!r.events || !r.run_id){
+    $('#ask-status').textContent = r.detail || '这条跑批已经不在等回答了——去卡片上看它的最新状态即可';
+    return;
+  }
+  // 提交成功即关窗：续跑进度在卡片上实时可见（LIVE 画面 + 步骤），不需要守着这个弹窗
+  $('#ask').close();
+  attach(asking.name, r.events, '从回答的断点接着跑');
 }
 
 // ===== 验收路线结构化编辑器 =====
@@ -1464,17 +1553,18 @@ async function openPlaybook(name, skill, tab){
   pbTab(tab || 'intent');   // 默认落在 intent：人先看「要干什么」，再看怎么走
   const q = q_(skill);
   const [pbData, intent, expect, spec, cvars, cfg] = await Promise.all([
-    (await fetch(`/api/scenarios/${name}/playbook${q}`)).json(),
-    (await fetch(`/api/scenarios/${name}/intent${q}`)).json(),
-    (await fetch(`/api/scenarios/${name}/expect${q}`)).json(),
+    (await fetch(`/api/scenarios/${encodeURIComponent(name)}/playbook${q}`)).json(),
+    (await fetch(`/api/scenarios/${encodeURIComponent(name)}/intent${q}`)).json(),
+    (await fetch(`/api/scenarios/${encodeURIComponent(name)}/expect${q}`)).json(),
     INTENT_SPEC.length ? INTENT_SPEC : (await fetch('/api/intent-spec')).json(),
-    (await fetch(`/api/scenarios/${name}/context${q}`)).json(),
+    (await fetch(`/api/scenarios/${encodeURIComponent(name)}/context${q}`)).json(),
     (await fetch(`/api/skills/${encodeURIComponent(skill)}/config`)).json().catch(() => ({})),
   ]);
   pb.data = pbData; pb.intent = intent; INTENT_SPEC = spec; CTXVARS = cvars || null; SKILLCFG = cfg || {};
   pbRender();
   intentDocMount('pb-intentbox', {scenario:name, skill, doc:intent, mode:'read'});
   expectDocMount('pb-expectbox', {scenario:name, skill, data:expect, mode:'read'});
+  renderCfgInto('pb-cfg', skill, false);
   $('#pb-status').textContent = '';
 }
 
@@ -1600,11 +1690,11 @@ async function pbSaveStep(i){
 async function pbPut(body){
   const st = $('#pb-status'); st.textContent = '保存中…';
   try{
-    const res = await fetch(`/api/scenarios/${pb.scenario}/playbook`,
+    const res = await fetch(`/api/scenarios/${encodeURIComponent(pb.scenario)}/playbook`,
       {method:'PUT', headers:{'Content-Type':'application/json'},
        body: JSON.stringify({skill: pb.skill, ...body})});
     if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
-    pb.data = await (await fetch(`/api/scenarios/${pb.scenario}/playbook${q_(pb.skill)}`)).json();
+    pb.data = await (await fetch(`/api/scenarios/${encodeURIComponent(pb.scenario)}/playbook${q_(pb.skill)}`)).json();
     pbEditing = null; pbNew = null; pbRender();
     st.textContent = '已保存';
     load();
@@ -1616,7 +1706,7 @@ async function pbSave(){
   const raw = $('#pb-rawtext'); if(!raw) return;
   const st = $('#pb-status'); st.textContent = '保存中…';
   try{
-    const res = await fetch(`/api/scenarios/${pb.scenario}/playbook`,
+    const res = await fetch(`/api/scenarios/${encodeURIComponent(pb.scenario)}/playbook`,
       {method:'PUT', headers:{'Content-Type':'application/json'},
        body: JSON.stringify({skill: pb.skill, raw: raw.value})});
     if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
@@ -1733,83 +1823,36 @@ function renderTraceStep(s){
   </details>`;
 }
 
-function renderJudgment(j, expect){
+function renderJudgment(j){
   if(!j || !j.steps || !j.steps.length) return '<div class="empty">这次没有判定结果</div>';
-  const normalize = value => value === 'pass' ? 'pass' : value === 'fail' ? 'fail' : 'blocked';
-  const stepStatus = step => {
-    const results = (step.check || []).map(c => normalize(c.result));
-    if(results.includes('fail')) return 'fail';
-    if(step.reached === false || results.includes('blocked') || !results.length) return 'blocked';
-    return 'pass';
-  };
-  const meta = {
-    pass: {label:'通过', sentence:'这一步全部通过'},
-    fail: {label:'失败', sentence:'这一步有检查未通过'},
-    blocked: {label:'卡住', sentence:'这一步无法完成判断'},
-  };
-  const expectedSteps = (expect || {}).steps || [];
-  // 早期 judgment 只存 step 编号；标题和要求从同次跑批冻结的 expect 快照补齐。
-  const steps = j.steps.map((raw, index) => {
-    const expected = expectedSteps[index] || {};
-    const checks = (raw.check || []).map((check, ci) => ({
-      ...check, fact:check.fact || (expected.check || [])[ci] || '',
-    }));
-    const step = {...raw, go:raw.go || expected.go || '', check:checks};
-    return {step, index, status:stepStatus(step)};
-  });
-  const count = status => steps.filter(item => item.status === status).length;
-  const statusBadge = status => `<span class="jg-status"><span class="icon">${MARK[status]}</span>${meta[status].label}</span>`;
-
-  return `<div class="jg">
-    <div class="jg-overview">
-      <div class="jg-overview-main">
-        <div class="jg-overview-title">裁判逐步验收结果</div>
-        <div class="jg-totals">
-          <span class="jg-total"><b>${steps.length}</b> 个步骤</span>
-          <span class="jg-total pass"><b>${count('pass')}</b> 通过</span>
-          <span class="jg-total fail"><b>${count('fail')}</b> 失败</span>
-          <span class="jg-total blocked"><b>${count('blocked')}</b> 卡住</span>
-        </div>
-      </div>
-      <div class="jg-nav">${steps.map(({index,status}) =>
-        `<a class="${status}" href="#judge-step-${index+1}">步骤 ${index+1} · ${meta[status].label}</a>`).join('')}
-      </div>
-    </div>
-
-    ${steps.map(({step:s,index:i,status}) => `
-      <section class="jg-step ${status}" id="judge-step-${i+1}">
-        <header>
-          <span class="jg-no">${i+1}</span>
-          <div class="jg-step-title"><small>${meta[status].sentence}</small>${inline(s.go||'（未记录这一步要做什么）')}</div>
-          ${statusBadge(status)}
-        </header>
+  const legend = `<div class="jg-legend">
+    <span><i style="background:var(--line)"></i>灰底＝验收路线<b style="margin-left:3px">规定</b>的（expect.yaml 原文）</span>
+    <span><i style="background:color-mix(in srgb,var(--accent) 35%,transparent)"></i>浅色＝这次裁判<b style="margin-left:3px">实测</b>的</span>
+  </div>`;
+  const lbl = t => `<span class="lbl">${t}</span>`;
+  return `<div class="jg">${legend}
+    ${j.steps.map((s, i) => `
+      <div class="jg-step">
+        <header><span class="jg-no">${i+1}</span>
+          <span>${lbl('规定 · go')}${inline(s.go||'')}</span></header>
         <div class="jg-body">
-          <div class="jg-route">
-            <span class="k">是否到达目标页</span>
-            <span class="reached ${s.reached === false ? 'no' : ''}">${s.reached === false ? '没有到达' : '已到达'}</span>
-            <span class="k">裁判怎么到的</span>
-            <span>${s.how ? inline(s.how) : '（未记录到达过程）'}</span>
+          <div class="jg-ran">
+            <span class="k">reached</span>
+            <span>${s.reached === false ? '<span class="res fail">没到</span>' : '<span class="res pass">到了</span>'}</span>
+            ${s.how ? `<span class="k">how</span><span>${inline(s.how)}</span>` : ''}
           </div>
-          <div class="jg-checks">
-            ${(s.check||[]).map((c, ci) => {
-              const result = normalize(c.result);
-              return `<article class="jg-check ${result}">
-                <div class="jg-check-head">
-                  <b>检查 ${i+1}.${ci+1}</b><span class="sp"></span>${statusBadge(result)}
-                </div>
-                <div class="jg-row expected">
-                  <span class="k">要检查什么</span><div class="jg-value">${inline(c.fact||'（未记录检查要求）')}</div>
-                </div>
-                <div class="jg-row actual">
-                  <span class="k">实际证据</span><div class="jg-value">${c.evidence ? esc(String(c.evidence).trim()) : '（没有记录证据）'}</div>
-                </div>
-                ${c.note ? `<div class="jg-reason"><span class="k">${result === 'pass' ? '补充说明' : '未通过原因'}</span>
-                  <div>${inline(c.note)}</div></div>` : ''}
-              </article>`;
-            }).join('') || '<div class="empty">这一步没有检查项</div>'}
-          </div>
+          ${(s.check||[]).map(c => `
+            <div class="jg-check">
+              <div class="jg-spec">${lbl('规定要核实的事 · fact')}${inline(c.fact||'')}</div>
+              <div class="jg-got">
+                <div><span class="res ${c.result}">${MARK[c.result]||'?'} ${c.result}</span></div>
+                ${c.evidence ? `<div>${lbl('裁判实际读到的原文 · evidence')}
+                  <div class="jg-evi">${esc(String(c.evidence).trim())}</div></div>` : ''}
+                ${c.note ? `<div class="jg-note">note：${inline(c.note)}</div>` : ''}
+              </div>
+            </div>`).join('')}
         </div>
-      </section>`).join('')}
+      </div>`).join('')}
   </div>`;
 }
 
@@ -2080,10 +2123,10 @@ async function intentDocSaveSection(id, key){
   const status = $('#pb-status');
   if(status) status.textContent = '保存中…';
   try{
-    const res = await fetch(`/api/scenarios/${st.scenario}/intent`,
+    const res = await fetch(`/api/scenarios/${encodeURIComponent(st.scenario)}/intent`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     if(!res.ok) throw new Error((await res.json()).detail || res.statusText);
-    st.doc = await (await fetch(`/api/scenarios/${st.scenario}/intent${q_(st.skill)}`)).json();
+    st.doc = await (await fetch(`/api/scenarios/${encodeURIComponent(st.scenario)}/intent${q_(st.skill)}`)).json();
     st.archived = undefined;
     st.editing = null; intentDocRender(id);
     if(status) status.textContent = '已保存';
@@ -2098,6 +2141,7 @@ async function intentDocSaveSection(id, key){
 // 真正能人为决定的是**跑哪个环境**，那个在卡片上的运行按钮里选。
 let CTXVARS = null;
 let SKILLCFG = {};      // 技能的 config/env.json，给下面的 cfgInline 解释引用用
+let SKILL_PROJECTS = [];  // scenarios/ 下的全部分组目录（含空组，如 定量/），新建场景的下拉用它
 async function loadSkillCfg(skill){
   try{ SKILLCFG = await (await fetch(`/api/skills/${encodeURIComponent(skill || 'roadbook')}/config`)).json(); }
   catch(e){ SKILLCFG = {}; }
@@ -2128,25 +2172,242 @@ function cfgPerEnv(key){
 }
 // 「产品经理写场景时不知道有哪些账号」——把 config/env.json 的 environments 摊成一张表。
 // 键名旁边有 `<键>_note` 就当解释挂到 hover 上（配置文件里本来就是这么写注释的）。
-function cfgTableHtml(){
+function cfgTableHtml(editable, skill){
   const cfg = SKILLCFG || {}; const envs = cfg.environments || {}; const names = Object.keys(envs);
   if(!names.length) return '';
+  const sk = skill || (state[0] && state[0].skill) || 'roadbook';
   const keys = [...new Set(names.flatMap(n => Object.keys(envs[n] || {})))].filter(k => k !== 'note' && !k.endsWith('_note'));
   const fmt = v => v === undefined ? '<span style="color:var(--muted)">—</span>'
                  : typeof v === 'object' ? `<code title="${esc(JSON.stringify(v))}">${esc(JSON.stringify(v)).slice(0, 48)}${JSON.stringify(v).length > 48 ? '…' : ''}</code>`
                  : `<code>${esc(String(v))}</code>`;
   const note = (n, k) => (envs[n] || {})[k + '_note'] || cfg[k + '_note'] || '';
+  const delBtn = (n, k) => editable && !CFG_BUILTIN.includes(k) && envs[n][k] !== undefined
+      ? ` <button class="ghost sm" style="padding:0 6px;font-size:10px" title="删除这条配置"
+             onclick="cfgDelEntry('${esc(sk)}','${esc(n)}','${esc(k)}','${esc(id_of || '')}')">删</button>` : '';
   const rows = keys.map(k => `<tr><td class="k" title="${esc(note(names[0], k))}">${esc(k)}</td>${
-      names.map(n => `<td title="${esc(note(n, k))}">${fmt(envs[n][k])}</td>`).join('')}</tr>`).join('');
+      names.map(n => `<td title="${esc(note(n, k))}">${fmt(envs[n][k])}${delBtn(n, k)}</td>`).join('')}</tr>`).join('');
   // 环境之外的通用项（比如受访者端域名）也列上，不然人找不到
   const common = Object.keys(cfg).filter(k => k !== 'environments' && k !== 'env' && !k.endsWith('_note')
                                              && typeof cfg[k] !== 'object' && !keys.includes(k));
   const commonRows = common.map(k => `<tr><td class="k" title="${esc(cfg[k + '_note'] || '')}">${esc(k)}</td>
       <td colspan="${names.length}">${fmt(cfg[k])}</td></tr>`).join('');
+  // 新增配置项：键名 + 每个环境的值。值只收 http(s) 地址（域名类配置），写进 environments.<env>.<键>
+  const hintLine = editable
+    ? `<div class="hint">来自 <code>config/env.json</code>，所有场景共用；场景里用 <code>environments.&lt;env&gt;.键名</code> 引用。值须 origin 地址（域名根，不带路径）；带「删」的是后来加的，内置键不可删。</div>`
+    : `<div class="hint"><b>全局配置（所有场景共用），此处只读</b>——在某个场景的界面里改全局值会影响其他场景。新增 / 修改去「＋新建场景」弹窗的同一个面板，或直接改 <code>config/env.json</code>。</div>`;
+  const addRow = editable ? `
+    <div style="display:flex;gap:6px;margin-top:9px;align-items:center;flex-wrap:wrap">
+      <input data-cfg-key placeholder="键名，如 study_web"
+             style="flex:0 0 150px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit">
+      ${names.map(n => `<input data-env="${esc(n)}" placeholder="${esc(n)} 的地址"
+             style="flex:1 1 180px;min-width:140px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit">`).join('')}
+      <button class="ghost sm" onclick="cfgAddEntry('${esc(sk)}','${esc(id_of || '')}')">添加</button>
+    </div>` : '';
+  const badge = editable
+    ? `<span class="cfg-badge">全局 · 所有场景共用 · 可增改</span>`
+    : `<span class="cfg-badge">全局 · 只读 · 要改去「＋新建场景」</span>`;
   return `<div class="cfgtab">
+    ${badge}
     <table><thead><tr><th>配置项</th>${names.map(n => `<th>${esc(n)}${n === cfg.env ? ' <small>默认</small>' : ''}</th>`).join('')}</tr></thead>
     <tbody>${rows}${commonRows}</tbody></table>
-    <div class="hint">来自 <code>config/env.json</code>，所有场景共用；场景里用 <code>environments.&lt;env&gt;.键名</code> 引用。</div></div>`;
+    ${addRow}
+    ${hintLine}</div>`;
+}
+const CFG_BUILTIN = ['researcher_web', 'interview_web'];
+// editable 表格渲染进哪个容器（id_of 由 renderCfgInto 暂存，回调和重渲染都用它）
+let id_of = null;
+async function cfgAddEntry(skill){
+  const box = document.getElementById(id_of);
+  const key = box.querySelector('[data-cfg-key]').value.trim();
+  if(!/^[a-z][a-z0-9_]*$/.test(key)){ alert('键名：小写字母开头，只含小写字母/数字/下划线'); return; }
+  const filled = [...box.querySelectorAll('[data-env]')]
+    .filter(el => el.value.trim()).map(el => [el.dataset.env, el.value.trim()]);
+  if(!filled.length){ alert('至少给一个环境填值（http(s):// 开头）'); return; }
+  const overwrite = filled.filter(([env]) => ((SKILLCFG.environments||{})[env]||{})[key] !== undefined);
+  if(overwrite.length && !confirm(
+    `${key} 在 ${overwrite.map(([e]) => e).join('、')} 已存在，本次是覆盖——它可能正被别的场景引用，影响面是全部场景。确定？`)) return;
+  for(const [env, value] of filled){
+    if(!/^https?:\/\//.test(value)){ alert(`${env} 的值要以 http(s):// 开头`); return; }
+    const res = await fetch(`/api/skills/${encodeURIComponent(skill)}/config/entries`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({env, key, value, skill})});
+    if(!res.ok){ alert('写入失败：' + ((await res.json()).detail || res.statusText)); return; }
+  }
+  await loadSkillCfg(skill); renderCfgInto(id_of, skill);
+}
+async function cfgDelEntry(skill, env, key){
+  if(!confirm(`删除 environments.${env}.${key}？场景里对它的引用会解释不出来。`)) return;
+  const res = await fetch(`/api/skills/${encodeURIComponent(skill)}/config/entries/${encodeURIComponent(env)}/${encodeURIComponent(key)}`, {method:'DELETE'});
+  if(!res.ok){ alert('删除失败：' + ((await res.json()).detail || res.statusText)); return; }
+  await loadSkillCfg(skill); renderCfgInto(id_of, skill);
+}
+function renderCfgInto(id, skill, editable = true){
+  // editable=false = 只读展示（全局配置不该在某个场景的界面里被改，语义会骗人）
+  id_of = editable ? id : null;
+  document.getElementById(id).innerHTML = cfgTableHtml(editable, skill);
+}
+async function pollAuthorActive(){
+  try{
+    const d = await (await fetch('/api/author/active')).json();
+    const running = d.running || [];
+    const btn = document.querySelector('header button[data-role="author-new"]');
+    if(!btn) return;
+    btn.textContent = running.length ? `生成中…${running.length}` : '＋ 新建场景';
+    btn.title = (d.recent || []).slice(0, 5)
+      .map(x => `${x.name || x.scenario || '(自动命名)'} → ${x.status}${x.ok === false ? '（失败）' : x.ok === true ? '（成功）' : ''}`).join('\n') || '新建场景';
+  }catch(e){ /* 轮询失败不打扰 */ }
+}
+setInterval(pollAuthorActive, 5000);
+
+// ---- 草稿：未生成内容自动留存（author-draft-current）+ 具名草稿（author-drafts）----
+// 自动留存是悄悄的（重开弹窗恢复、生成成功清掉）；具名草稿只手动存——调试底稿反复用。
+let draftLoadedId = null, draftDirty = false, authorSeq = 0;
+function authorDraftCurrent(){
+  try{ return JSON.parse(localStorage.getItem('author-draft-current') || 'null'); }catch(e){ return null; }
+}
+function loadNamedDrafts(){
+  try{
+    const rows = JSON.parse(localStorage.getItem('author-drafts') || '[]');
+    let changed = false;
+    rows.forEach((r, i) => { if(!r.id){ r.id = 'd' + Date.now() + i; changed = true; } });
+    if(changed) localStorage.setItem('author-drafts', JSON.stringify(rows));
+    return rows;
+  }catch(e){ return []; }
+}
+function saveNamedDrafts(rows){ localStorage.setItem('author-drafts', JSON.stringify(rows)); updateDraftBadge(); }
+function updateDraftBadge(){
+  const btn = document.getElementById('draft-open'); if(!btn) return;
+  const rows = loadNamedDrafts();
+  btn.hidden = rows.length === 0;
+  document.getElementById('draft-count').textContent = rows.length || '';
+  const save = document.getElementById('author-save-draft');
+  if(save && !$('#author').hidden) save.disabled = !($('#author-ask').value.trim());
+}
+function draftAutoName(ask){
+  const first = (ask || '').trim().split('\n')[0];
+  const base = first ? (first.length > 16 ? first.slice(0, 16) + '…' : first) : '';
+  return base || `草稿-${new Date().toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}`;
+}
+function renderNamedDrafts(){
+  const box = document.getElementById('draft-list'); if(!box) return;
+  box.innerHTML = loadNamedDrafts().map(d => `
+    <div class="draft-row" onclick="loadNamedDraft('${d.id}')">
+      <span class="n" title="${esc(d.name)}">${esc(d.name)}</span>
+      <span class="t">${esc(d.saved_at || '')}</span>
+      <button class="x" title="改名" onclick="event.stopPropagation();renameNamedDraft('${d.id}')">✎</button>
+      <button class="x" title="删除" onclick="event.stopPropagation();delNamedDraft('${d.id}')">✕</button>
+      <span class="p">${esc((d.ask || '').slice(0, 30) || '（空）')}</span>
+    </div>`).join('');
+}
+function toggleDraftMenu(e){
+  if(e) e.stopPropagation();
+  const menu = document.getElementById('draft-menu');
+  if(!menu) return;
+  menu.hidden = !menu.hidden;
+  if(!menu.hidden){ renderNamedDrafts(); updateDraftBadge(); }
+}
+function saveNamedDraft(){
+  const ask = $('#author-ask').value;
+  if(!ask.trim()){ $('#author-status').textContent = '先写点内容再存草稿'; return; }
+  const rows = loadNamedDrafts();
+  const stamp = new Date().toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+  // 从某份草稿载入后再点存 = 原地更新那份（邮件草稿的习惯），并顶到最前
+  if(draftLoadedId){
+    const hit = rows.find(d => d.id === draftLoadedId);
+    if(hit){
+      hit.ask = ask; hit.name_field = $('#author-name')?.value || '';
+      hit.url = $('#author-url')?.value || ''; hit.project = $('#author-project')?.value || '';
+      hit.saved_at = stamp;
+      rows.splice(rows.indexOf(hit), 1); rows.unshift(hit);
+      saveNamedDrafts(rows);
+      draftDirty = false; saveAuthorDraft(); renderNamedDrafts();
+      $('#author-status').textContent = `已更新草稿「${hit.name}」`;
+      return;
+    }
+  }
+  let name = draftAutoName(ask), n = 2;
+  while(rows.some(d => d.name === name)) name = `${draftAutoName(ask)} (${n++})`;
+  const entry = {id: 'd' + Date.now(), name, ask, name_field: $('#author-name')?.value || '',
+                 url: $('#author-url')?.value || '', project: $('#author-project')?.value || '', saved_at: stamp};
+  rows.unshift(entry);
+  let removed = null;
+  if(rows.length > 20) removed = rows.pop().name;
+  saveNamedDrafts(rows);
+  draftLoadedId = entry.id; draftDirty = false; saveAuthorDraft();
+  const btn = document.getElementById('draft-open');
+  if(btn){ btn.classList.remove('ping'); void btn.offsetWidth; btn.classList.add('ping'); }
+  $('#author-status').textContent = `已存为草稿「${name}」 · ${stamp}` + (removed ? `（已满 20 条，最旧的「${removed}」被移除）` : '');
+}
+function loadNamedDraft(id){
+  const d = loadNamedDrafts().find(x => x.id === id); if(!d) return;
+  if($('#author-ask').value.trim() && draftDirty && !confirm('当前内容还没存为草稿，载入会替换掉，继续？')) return;
+  $('#author-ask').value = d.ask || '';
+  $('#author-name').value = d.name_field || '';
+  $('#author-url').value = d.url || '';
+  if(d.project){ const s = $('#author-project'); if(s && [...s.options].some(o => o.value === d.project)) s.value = d.project; }
+  draftLoadedId = id; draftDirty = false; saveAuthorDraft();
+  ['author-name-field', 'author-url-field'].forEach(fid => {
+    const det = document.getElementById(fid);
+    const val = fid === 'author-name-field' ? (d.name_field || '') : (d.url || '');
+    if(val) det.open = true;
+  });
+  const menu = document.getElementById('draft-menu'); if(menu) menu.hidden = true;
+  $('#author-status').textContent = `已载入草稿「${d.name}」——改完点「存为草稿」会更新这份`;
+  renderNamedDrafts();
+}
+function delNamedDraft(id){
+  const d = loadNamedDrafts().find(x => x.id === id); if(!d) return;
+  if(!confirm(`删除草稿「${d.name}」？`)) return;
+  saveNamedDrafts(loadNamedDrafts().filter(x => x.id !== id));
+  if(draftLoadedId === id) draftLoadedId = null;
+  renderNamedDrafts();
+}
+function renameNamedDraft(id){
+  const d = loadNamedDrafts().find(x => x.id === id); if(!d) return;
+  const name = prompt('草稿名', d.name);
+  if(name === null || !name.trim()) return;
+  d.name = name.trim(); saveNamedDrafts(loadNamedDrafts()); renderNamedDrafts();
+}
+function clearAuthorForm(){
+  $('#author-ask').value = ''; $('#author-name').value = ''; $('#author-url').value = '';
+  const s = $('#author-project');
+  if(s){ const want = s.dataset.default || ''; if([...s.options].some(o => o.value === want)) s.value = want; }
+  localStorage.removeItem('author-draft-current');
+  draftLoadedId = null; draftDirty = false;
+  $('#author-status').textContent = '已清空';
+}
+function saveAuthorDraft(){
+  if(authoring) return;                        // 改场景模式不进全局草稿（它写的是"想改什么"，只对单场景有效）
+  try{ localStorage.setItem('author-draft-current', JSON.stringify({
+    ask: $('#author-ask').value, name: $('#author-name')?.value || '',
+    url: $('#author-url')?.value || '', project: $('#author-project')?.value || '',
+    loaded_id: draftLoadedId || null})); }catch(e){}
+}
+let authorDraftBound = false;
+function bindAuthorDraft(){
+  if(authorDraftBound) return; authorDraftBound = true;
+  const touch = () => { draftDirty = true; saveAuthorDraft(); updateDraftBadge(); };
+  ['author-ask', 'author-name', 'author-url'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.addEventListener('input', touch);
+  });
+  const sel = document.getElementById('author-project'); if(sel) sel.addEventListener('change', touch);
+  const dlg = document.getElementById('author');
+  dlg.addEventListener('keydown', e => {
+    if((e.metaKey || e.ctrlKey) && e.key === 's' && !$('#author-save-draft').hidden){
+      e.preventDefault(); saveNamedDraft();
+    }
+  });
+  dlg.addEventListener('cancel', e => {           // Esc：下拉开着只收下拉，不关弹窗
+    const menu = document.getElementById('draft-menu');
+    if(menu && !menu.hidden){ e.preventDefault(); menu.hidden = true; }
+  });
+}
+bindAuthorDraft();
+
+async function openGlobalCfg(){
+  document.querySelector('#cfgdlg').showModal();
+  await loadSkillCfg(state[0]?.skill);
+  renderCfgInto('global-cfg', state[0]?.skill);
 }
 function cfgInline(html){
   if(!SKILLCFG || !Object.keys(SKILLCFG).length) return html;
@@ -2178,37 +2439,10 @@ function ctxInline(text){
     if(!v) return whole;                               // context.yaml 这种不是引用的，原样留着
     // 值不直接摆出来（一行里三个变量各拖一串 URL，路线就读不下去了），hover 再看；
     // 总表在顶上随时能展开。没跑出来过的还是当场标出来——那是会判 BLOCK 的事，不能藏。
-    if(!v.declared)
-      return `<span class="cvar undecl" data-tip="intent.md「留给裁判的事实」里没有 ${key} 这一行——补上它，否则 runner 不一定交这个值，裁判取不到就判 BLOCK">context.${key}<u>!</u></span>`;
     return v.known
       ? `<span class="cvar" data-tip="${esc(v.last_value)}">context.${key}</span>`
-      : `<span class="cvar unknown" data-tip="已声明，但还没有任何一次跑批交出过这个值">context.${key}<u>？</u></span>`;
+      : `<span class="cvar unknown" data-tip="还没有任何一次跑批交出过这个值">context.${key}<u>？</u></span>`;
   });
-}
-
-// 编辑态的一排变量芯片：点一下把 `context.<键名>` 插进当前正在写的那个框。
-// 人不用知道变量的语法、也不用记住有哪些键——这是「指导用户」那一半。
-function ctxPickHtml(id){
-  const vars = ((CTXVARS||{}).variables)||[];
-  if(!vars.length) return '';
-  const chips = vars.map(v => `<button type="button" class="cvchip${v.declared?'':' undecl'}"
-      title="${esc(v.declared ? (v.known ? '上次取值：'+v.last_value : '已声明，还没跑出来过')
-                             : 'intent.md 里没声明这个键，补一行 '+v.key+' 才稳')}"
-      onclick="ctxPick('${id}','${v.key}')">context.${v.key}</button>`).join('');
-  return `<div class="cvpick"><span>点一下插进光标处：</span>${chips}
-    <em>这些是「跑完才知道」的值。写死的地址和文案直接打进正文，不要用变量。</em></div>`;
-}
-function ctxPick(id, key){
-  const token = `context.${key}`;
-  const el = document.activeElement;
-  const target = (el && el.tagName === 'TEXTAREA' && el.closest(`#${id}`))
-    ? el : document.querySelector(`#${id} textarea[data-go]`);
-  if(!target) return;
-  const s = target.selectionStart ?? target.value.length;
-  const e2 = target.selectionEnd ?? s;
-  target.value = target.value.slice(0, s) + token + target.value.slice(e2);
-  target.selectionStart = target.selectionEnd = s + token.length;
-  target.focus();
 }
 
 function ctxPanelHtml(){
@@ -2265,7 +2499,7 @@ function expectReadHtml(e, {id='', editable=true} = {}){
             <textarea class="ed-in" rows="1" data-check="${j}" placeholder="「总任务数」等于 0">${esc(c)}</textarea>
             <button class="ed-x" onclick="expectDocDelCheck('${id}',${i},${j})">✕</button></div>`).join('')}
           <button class="ed-add" onclick="expectDocAddCheck('${id}',${i})">＋ check</button>
-        </div>${ctxPickHtml(id)}${foot(i)}</div>`;
+        </div>${foot(i)}</div>`;
     }
     return `<div class="ex-step">
       <header><span class="ex-no">${i+1}</span><span>steps[${i}]</span><span class="sp"></span>${pen(i)}</header>
@@ -2299,7 +2533,7 @@ function expectDocCancel(id){
 async function expectDocReload(id){
   const st = DOCS[id];
   try{
-    const d = await (await fetch(`/api/scenarios/${st.scenario}/expect${q_(st.skill)}`)).json();
+    const d = await (await fetch(`/api/scenarios/${encodeURIComponent(st.scenario)}/expect${q_(st.skill)}`)).json();
     st.data = {goal:d.goal||'', steps:(d.steps||[]).map(s=>({go:s.go||'', check:[...(s.check||[])]}))};
   }catch(e){}
 }
@@ -2325,7 +2559,7 @@ async function expectDocSave(id, key){
   _exPull(id, key);
   const status = $('#pb-status'); if(status) status.textContent = '保存中…';
   try{
-    const res = await fetch(`/api/scenarios/${st.scenario}/expect`,
+    const res = await fetch(`/api/scenarios/${encodeURIComponent(st.scenario)}/expect`,
       {method:'PUT', headers:{'Content-Type':'application/json'},
        body: JSON.stringify({skill:st.skill, goal:st.data.goal, steps:st.data.steps})});
     const d = await res.json();
@@ -2389,11 +2623,14 @@ async function detail(rid){
 
     <div class="pane" data-pane="overview">
       ${renderDiag(r)}
+      ${r.external ? `<div class="diag neutral"><b>外部记录</b><span>${esc(r.source || '')}
+        —— 迁移自 roadbook/runs/（Claude Code 时代的产物）：只有结论、裁判证据和事实基线，
+        没有执行轨迹和录屏。原始目录仍在原处。</span></div>` : ''}
       <h4>结论</h4><div style="font-size:13px">${esc(r.summary||'')}</div>
       ${r.notes?`<h4>备注</h4><pre>${esc(r.notes)}</pre>`:''}
       <h4>用量</h4>${renderUsage(r.llm_calls)}
-      <h4>执行录屏</h4><video controls style="width:100%;border-radius:5px;background:#000"
-        src="/api/runs/${rid}/video?which=runner"></video>
+      ${r.external ? '' : `<h4>执行录屏</h4><video controls style="width:100%;border-radius:5px;background:#000"
+        src="/api/runs/${rid}/video?which=runner"></video>`}
       ${jud.length?`<h4>裁判录屏</h4><video controls
         style="width:100%;border-radius:5px;background:#000"
         src="/api/runs/${rid}/video?which=judge"></video>`:''}
@@ -2405,7 +2642,7 @@ async function detail(rid){
     </div>
 
     <div class="pane" data-pane="judge" hidden>
-      <h4>判定结果</h4>${renderJudgment(r.judgment, r.expect)}
+      <h4>判定结果</h4>${renderJudgment(r.judgment)}
       <h4>裁判照的规矩</h4>
       <div class="task"><details><summary style="cursor:pointer;font-size:12px;color:var(--muted)">
         judge-protocol.md　取证协议（点开看全文）</summary>
@@ -2466,7 +2703,7 @@ function exportRunHtml(){
 
   <h2>执行轨迹（${run.length} 步）</h2>${renderTrace(run, r.llm_calls, false)}
 
-  <h2>判定结果</h2>${renderJudgment(r.judgment, r.expect)}
+  <h2>判定结果</h2>${renderJudgment(r.judgment)}
   ${jud.length?`<h2>裁判取证过程（${jud.length} 步）</h2>${renderTrace(jud, r.llm_calls, true)}`:''}
   ${r.judge_output?`<h2>判分脚本输出</h2><pre>${esc(r.judge_output)}</pre>`:''}
 
