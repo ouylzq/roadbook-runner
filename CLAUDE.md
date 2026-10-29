@@ -82,7 +82,7 @@ tools  ←  runtime  ←  server / run.py
 .venv/bin/pip install -e ".[dev]"      # 可安装包 + ruff/mypy/pytest
 .venv/bin/ruff check .                 # 0 错
 .venv/bin/mypy runtime tools run.py    # 0 错
-.venv/bin/python -m pytest             # 59 passed
+.venv/bin/python -m pytest             # 267 passed
 ```
 
 ## 跑
@@ -100,3 +100,9 @@ tools  ←  runtime  ←  server / run.py
 - 用持久 PTY/终端会话托管服务；启动后必须在**下一次独立调用**里再检查 `lsof -iTCP:8900 -sTCP:LISTEN` 和健康接口，不能只相信启动命令内的探活。
 - `storage/` 是历史跑批数据，roadbook 路径是场景来源，两者彼此独立。看板加载哪套场景由 `ROADBOOK_REPO` 决定。
 - 启动探活不能只看 HTTP 200：还要读取 `/api/skills`，确认包含你自己的场景。有跑批处于 running 时不要为改配置重启服务。
+
+## 数据持久化（硬规矩）
+
+- **唯一数据源是本目录**：`storage/`（跑批产物+录屏）、`reports/`、`qa-agent.db`（索引）。看板只从这里起（`./serve.sh`）。**绝不能从别的 checkout 起**——db 和 storage 跟着项目目录走，换个目录起服务，历史就"消失"一次（有过排一下午"记录不见了"、最后发现是旧 checkout 分家导致的教训）。
+- 外来历史记录带 `external: true`（run.json 字段）：只上历史列表、不上卡片——它们没有封面和录屏。卡片按"全名 → 叶子名"认领历史（`server.py` 的 `_latest_for`），旧平铺命名能挂到对应的分组卡上。
+- **每天备份**：`./backup_data.sh`（APFS 克隆 + sqlite `.backup`，保留 14 份），建议挂一个每日定时任务自动跑；跑批大日子可以手动多跑。`backups/` 不进 git。

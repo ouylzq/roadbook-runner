@@ -22,7 +22,7 @@ from tools import BROWSER_TOOLS, REGISTRY, Tool
 from tools.base import legal_scenario_name
 
 from . import recorder
-from .app import QaAgent, RejudgeRefused
+from .app import QaAgent, RejudgeRefusedError
 from .cancel import CancelRegistry
 from .concurrency import RunGate
 from .context_vars import describe as describe_context
@@ -39,7 +39,7 @@ from .public_config import (
     suggest_key,
     validate_entry,
 )
-from .session import JUDGE_PROTOCOL, new_run_id, resume_run_id, rejudge_run_id
+from .session import JUDGE_PROTOCOL, new_run_id, rejudge_run_id, resume_run_id
 from .skills import Skill
 from .traces import Run
 
@@ -236,7 +236,7 @@ def _rejudge_target(scenario_name: str, latest: Run | None) -> dict[str, Any] | 
             continue   # 没有需要复核的结论，或者还挂着
         try:
             _src, _d, _sk, _sc, warnings = core.rejudge_preflight(row["run_id"])
-        except RejudgeRefused:
+        except RejudgeRefusedError:
             continue
         except Exception:
             continue   # 列表接口不许被单条脏数据炸掉
@@ -676,7 +676,7 @@ def _start_rejudge(rid: str, headless: bool = True) -> dict[str, Any]:
     手动「⚖ 重跑裁判」和「采纳判据修订后自动重判」都走这一条路。"""
     try:
         src, _root_dir, sk, _scenario, warnings = core.rejudge_preflight(rid)
-    except RejudgeRefused as e:
+    except RejudgeRefusedError as e:
         raise HTTPException(e.status, e.message) from e
     root = src.rejudge_of or src.run_id
     _prod_fence(src.env)     # 重判沿用原跑批的环境，prod 的一样要过围栏
@@ -766,7 +766,7 @@ def api_run(rid: str) -> dict[str, Any]:
     try:
         _src, _d, _sk, _sc, warns = core.rejudge_preflight(rid)
         data["rejudge"] = {"allowed": True, "reason": "", "warnings": warns}
-    except RejudgeRefused as e:
+    except RejudgeRefusedError as e:
         data["rejudge"] = {"allowed": False, "reason": e.message, "warnings": []}
     data["cleanup"] = core.store.cleanup_tasks_for_run(root)
     return data

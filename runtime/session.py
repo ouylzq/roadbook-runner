@@ -418,8 +418,11 @@ class RunSession:
             if not isinstance(i, dict):
                 continue
             for k in ("step", "check"):
+                raw = i.get(k)
+                if raw is None:
+                    continue
                 try:
-                    v = int(i.get(k))
+                    v = int(raw)
                     if v >= 1:
                         i[k] = v - 1
                 except (TypeError, ValueError):

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
 from tools import REGISTRY
 
 from .atoms import AtomMemory
@@ -25,13 +26,19 @@ from .intent import parse_intent
 from .knowledge import KnowledgeStore
 from .notify import notify_finished
 from .report import ReportWriter
-from .session import EventListener, FinishedHook, RunSession, new_run_id, resume_run_id, rejudge_run_id
+from .session import (
+    EventListener,
+    FinishedHook,
+    RunSession,
+    new_run_id,
+    resume_run_id,
+)
 from .skills import Skill, SkillLoader
 from .store import Store
 from .traces import Run
 
 
-class RejudgeRefused(Exception):
+class RejudgeRefusedError(Exception):
     """仅重判的 preflight 拒绝。status 是建议的 HTTP 状态码，message 是给人看的理由。"""
 
     def __init__(self, status: int, message: str):
@@ -127,52 +134,52 @@ class QaAgent:
     # ---- 仅重判 ---------------------------------------------------------------
     def rejudge_preflight(self, rid: str) -> tuple[Run, Path, Skill, Scenario, list[str]]:
         """仅重判的准入检查。通过返回 (原始记录, 原始目录, 技能, 场景, 软警告)，
-        不通过抛 RejudgeRefused——HTTP 层直接翻译成状态码。"""
+        不通过抛 RejudgeRefusedError——HTTP 层直接翻译成状态码。"""
         src = self.record(rid)
         if src is None:
-            raise RejudgeRefused(404, f"没有这次跑批: {rid}")
+            raise RejudgeRefusedError(404, f"没有这次跑批: {rid}")
         # 对重判记录再点一次重判，等价于对 root 重判——输入源一律回到 root 目录
         root = src.rejudge_of or src.run_id
         root_rec = self.record(root)
         if root_rec is None:
-            raise RejudgeRefused(404, f"原始跑批目录不在了: {root}")
+            raise RejudgeRefusedError(404, f"原始跑批目录不在了: {root}")
         if root_rec.external:
-            raise RejudgeRefused(400, "外部迁移的记录只有文字产物，没有登录态和事实现场，不能只重判")
+            raise RejudgeRefusedError(400, "外部迁移的记录只有文字产物，没有登录态和事实现场，不能只重判")
         if src.status is RunStatus.RUNNING:
-            raise RejudgeRefused(409, "这条跑批还在跑，等它出结论再重判")
+            raise RejudgeRefusedError(409, "这条跑批还在跑，等它出结论再重判")
         if root_rec.runner_outcome in ("blocked", "needs_input"):
-            raise RejudgeRefused(409, f"原跑批的 runner 没交棒（{root_rec.runner_outcome}），"
+            raise RejudgeRefusedError(409, f"原跑批的 runner 没交棒（{root_rec.runner_outcome}），"
                                      "没有可复核的事实和登录态——只能整跑或回答问题续跑")
         try:
             skill = self.skill(root_rec.skill or None)
             scenario = skill.scenario(root_rec.scenario)
         except FileNotFoundError as e:
-            raise RejudgeRefused(404, f"场景已不存在: {e}") from e
+            raise RejudgeRefusedError(404, f"场景已不存在: {e}") from e
         if not scenario.has_expect:
-            raise RejudgeRefused(409, "这个场景没有验收路线（expect.yaml），没有可重判的内容")
+            raise RejudgeRefusedError(409, "这个场景没有验收路线（expect.yaml），没有可重判的内容")
         root_dir = self.run_dir(root)
         facts = read_facts(root_dir)
         if not facts:
-            raise RejudgeRefused(409, "原跑批没留下事实（context.yaml 缺失或为空），裁判没有可对照的现场")
+            raise RejudgeRefusedError(409, "原跑批没留下事实（context.yaml 缺失或为空），裁判没有可对照的现场")
         state_file = root_dir / "storage_state.json"
         if not state_file.exists():
-            raise RejudgeRefused(409, "原跑批没留下登录态快照（storage_state.json），只能整跑")
+            raise RejudgeRefusedError(409, "原跑批没留下登录态快照（storage_state.json），只能整跑")
         try:
             state = json.loads(state_file.read_text(encoding="utf-8"))
             if not isinstance(state, dict) or not (state.get("cookies") or state.get("origins")):
                 raise ValueError("结构不完整")
         except (ValueError, OSError) as e:
-            raise RejudgeRefused(409, f"登录态快照损坏（{e}），裁判会直接撞登录墙——只能整跑") from e
+            raise RejudgeRefusedError(409, f"登录态快照损坏（{e}），裁判会直接撞登录墙——只能整跑") from e
         # 新判据引用了这次没留下的事实：重判时裁判拿不到，只能整跑
         missing = [k for k in required_context_keys(scenario) if not str(facts.get(k, "")).strip()]
         if missing:
-            raise RejudgeRefused(409, "新判据引用了本次没留下的事实："
+            raise RejudgeRefusedError(409, "新判据引用了本次没留下的事实："
                                  + "、".join(missing) + "——只能整跑重新采集")
         evidence = self.cleanup.evidence_state(root)
         if evidence == "cleaned":
-            raise RejudgeRefused(409, "证据已被清理（研究已终止/删除），页面取证无从谈起——只能整跑")
+            raise RejudgeRefusedError(409, "证据已被清理（研究已终止/删除），页面取证无从谈起——只能整跑")
         if evidence == "cleaning":
-            raise RejudgeRefused(409, "清理正在执行，等这一轮结束再看（正常情况下结论非 PASS 会保持 4 小时窗口）")
+            raise RejudgeRefusedError(409, "清理正在执行，等这一轮结束再看（正常情况下结论非 PASS 会保持 4 小时窗口）")
         warnings: list[str] = []
         age_h = (datetime.now().timestamp() - state_file.stat().st_mtime) / 3600
         if age_h > self.settings.cleanup_hold_hours:
@@ -253,13 +260,16 @@ class QaAgent:
             ci = int(e["check"]) if e.get("check") is not None else int(issue.get("check", -1))
             new_text = str(e.get("new_text") or "").strip()
             if not (0 <= si < len(steps) and 0 <= ci < len(steps[si].get("check") or [])):
-                skipped.append(f"第{si+1}.{ci+1}条：位置不存在"); continue
+                skipped.append(f"第{si+1}.{ci+1}条：位置不存在")
+                continue
             current = str(steps[si]["check"][ci])
             claimed = str(issue.get("current", ""))
             if claimed and claimed != current:
-                skipped.append(f"第{si+1}.{ci+1}条：判据在挂起期间被改过，请手动核对"); continue
+                skipped.append(f"第{si+1}.{ci+1}条：判据在挂起期间被改过，请手动核对")
+                continue
             if not new_text:
-                skipped.append(f"第{si+1}.{ci+1}条：修订文本为空"); continue
+                skipped.append(f"第{si+1}.{ci+1}条：修订文本为空")
+                continue
             steps[si]["check"][ci] = new_text
             applied.append(f"第{si+1}.{ci+1}条")
         if not applied:
@@ -377,6 +387,5 @@ class QaAgent:
         return task
 
     def read_yaml(self, run_id: str, filename: str) -> Any:
-        import yaml
         path = self.run_dir(run_id) / filename
         return yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None

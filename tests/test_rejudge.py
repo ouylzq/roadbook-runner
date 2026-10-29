@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from runtime.app import QaAgent, RejudgeRefused
+from runtime.app import QaAgent, RejudgeRefusedError
 from runtime.config import Settings
 from runtime.domain import RunStatus
 from runtime.session import RunSession, rejudge_run_id
@@ -81,21 +81,21 @@ def test_preflight_happy_path(qa: QaAgent):
 
 
 def test_preflight_404_when_record_missing(qa: QaAgent):
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("ghost")
     assert e.value.status == 404
 
 
 def test_preflight_rejects_external(qa: QaAgent):
     _mk_run(qa, "r-ext", external=True, context={"project_id": "p"}, storage_state=STATE)
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-ext")
     assert e.value.status == 400 and "外部" in e.value.message
 
 
 def test_preflight_rejects_still_running(qa: QaAgent):
     _mk_run(qa, "r-run", status="running", context={"project_id": "p"}, storage_state=STATE)
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-run")
     assert e.value.status == 409 and "还在跑" in e.value.message
 
@@ -103,34 +103,34 @@ def test_preflight_rejects_still_running(qa: QaAgent):
 def test_preflight_rejects_runner_that_never_handed_off(qa: QaAgent):
     """runner 没交棒（blocked/needs_input）就没有事实和登录态——重判无从取证。"""
     _mk_run(qa, "r-blk", outcome="blocked", status="blocked", verdict="BLOCK")
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-blk")
     assert e.value.status == 409 and "没交棒" in e.value.message
 
 
 def test_preflight_rejects_scenario_without_expect(qa: QaAgent):
     _mk_run(qa, "r-noexp", scenario="no-expect", context={"project_id": "p"}, storage_state=STATE)
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-noexp")
     assert e.value.status == 409 and "验收路线" in e.value.message
 
 
 def test_preflight_rejects_missing_context(qa: QaAgent):
     _mk_run(qa, "r-noctx", storage_state=STATE)   # 没写 context.yaml
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-noctx")
     assert e.value.status == 409 and "事实" in e.value.message
 
 
 def test_preflight_rejects_missing_or_broken_storage_state(qa: QaAgent):
     _mk_run(qa, "r-nost", context={"project_id": "p"})
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-nost")
     assert e.value.status == 409 and "登录态" in e.value.message
 
     _, d = _mk_run(qa, "r-badst", context={"project_id": "p"})
     (d / "storage_state.json").write_text("{截断的", encoding="utf-8")
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-badst")
     assert e.value.status == 409 and "损坏" in e.value.message
 
@@ -139,7 +139,7 @@ def test_preflight_rejects_when_new_expect_needs_unrecorded_facts(qa: QaAgent):
     """判据改过之后引用了本次没留下的事实——这是重判唯一救不了的缺口：
     裁判拿不到那个值，只能整跑重新采集。"""
     _mk_run(qa, "r-needfact", scenario="needs-fact", context={"other": "x"}, storage_state=STATE)
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-needfact")
     assert e.value.status == 409 and "project_id" in e.value.message
 
@@ -149,7 +149,7 @@ def test_preflight_rejects_cleaned_evidence(qa: QaAgent):
     qa.cleanup.store.upsert_cleanup_task(
         task_id="r-cleaned#0", run_id="r-cleaned", scenario="plain",
         script="cleanup_project.sh", args=["p1"], state="done", next_at="2026-10-28T00:00:00")
-    with pytest.raises(RejudgeRefused) as e:
+    with pytest.raises(RejudgeRefusedError) as e:
         qa.rejudge_preflight("r-cleaned")
     assert e.value.status == 409 and "已被清理" in e.value.message
 
