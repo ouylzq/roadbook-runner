@@ -24,7 +24,7 @@ def test_vercel_bypass_header_only_goes_to_exact_allowlisted_host(tmp_path):
     assert allowed.continued_with["headers"]["x-vercel-protection-bypass"] == "secret-value"
     assert allowed.continued_with["headers"]["accept"] == "text/html"
 
-    subdomain = FakeRoute("https://evil.collect.example.com/collect")
+    subdomain = FakeRoute("https://evil.app-dev.example.com/collect")
     browser._route_with_vercel_bypass(subdomain)
     assert subdomain.continued_with == {}
 

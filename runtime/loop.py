@@ -97,6 +97,11 @@ STALL_NUDGE = (
     "② 直接调 finish：outcome 用 blocked，summary 说清你卡在哪一步、页面上实际显示的是什么、"
     "你期望出现但没出现的是什么。一份写着 blocked 的结论远好过把轮数耗光。"
 )
+LANDING_NUDGE = (
+    "⚠️ 你已经多轮没有调工具了。现在只给你 finish 一个工具："
+    "把已经核实的检查逐条写入 judgment，没核实的写 blocked（evidence 写你在哪个 URL 搜了什么、没命中），"
+    "然后立刻调 finish。不要再继续取证。"
+)
 STALL_ABORT = (
     "页面连续 {n} 轮没有任何变化，agent 也没有收口——harness 判定卡死并终止。"
     "最后停在：{where}"
@@ -148,6 +153,7 @@ class AgentLoop:
         compact_prompt: str = "",
         refresh_task: Callable[[], str] | None = None,
         keep_recent_turns: int | None = None,
+        finish_check: Callable[[dict[str, Any]], str | None] | None = None,
     ):
         self.agent = agent
         self.llm = llm
@@ -169,7 +175,16 @@ class AgentLoop:
         # 没显式传就用子代理定义上的值（frontmatter → 全局默认两层）
         self.keep_recent_turns = (agent.keep_recent_turns if keep_recent_turns is None
                                   else keep_recent_turns)
+        # 交卷闸：调用方注入的最终检查（如裁判有 blocked 却没交判据质疑说明）。
+        # 最多退回一次——第二次还不过就收下，避免和模型死循环。
+        self.finish_check = finish_check
+        self._finish_bounces = 0
         self._tools = registry.schemas(agent.tools)
+        # 收口轮的工具白名单：只留 finish。2026-10-28 实测：LANDING_NUDGE 说「只给你
+        # finish 一个工具」，但 chat 仍传全量工具表，裁判照旧连发 eval_js，又攒满停滞
+        # 被 abort——提示词管不住行为，工具表才管得住。
+        self._landing_tools = [s for s in self._tools
+                               if s.get("function", {}).get("name") == "finish"]
 
     # ---- 入口 ----------------------------------------------------------------
     def run(self, ctx: ToolContext, system_prefix: str, task: str) -> LoopResult:
@@ -193,6 +208,7 @@ class AgentLoop:
         compactions = 0
         last_print: str | None = None     # 上一轮的环境指纹
         stalled_turns = 0                 # 环境连续多少轮没变化
+        landing = False                   # 停滞后是否已进入"只给 finish"的收口轮
         last_stop_reason: str | None = None
         truncated_in_a_row = 0            # 连续几次「输出被截断」，跟「环境没变化」是两回事，分开计
 
@@ -225,7 +241,8 @@ class AgentLoop:
                     messages.append({"role": "user", "content": LANDING_WARNING.format(n=remaining)})
                 elif llm_seq > 1 and remaining == 1:
                     messages.append({"role": "user", "content": LAST_TURN_WARNING})
-            reply = self.llm.chat(messages, self._tools, on_call=count_tokens)
+            reply = self.llm.chat(messages, self._landing_tools if landing else self._tools,
+                                  on_call=count_tokens)
 
             if last_stop_reason == "length":
                 # 哪怕 SDK 勉强解析出半截 tool_call，也不能执行：参数很可能缺尾巴。重新数进
@@ -260,6 +277,9 @@ class AgentLoop:
 
                 tool = self.registry.get(name)
                 problem = parsed.error or self.registry.validate_args(name, args)
+                if landing and not self.registry.is_terminal(name):
+                    problem = "收口轮只剩 finish 一个工具（其它都已被 harness 收走）。" \
+                              "把已核实的检查逐条写入 judgment，没核实的写 blocked，立刻调 finish。"
                 if problem:
                     output = f"工具参数无效：{problem}。handler 未执行，请只修正参数后重试。"
                     step = Step(len(steps) + 1, name, args, output,
@@ -300,6 +320,12 @@ class AgentLoop:
             if print_now is not None and print_now == last_print:
                 stalled_turns += 1
                 if stalled_turns >= self.agent.stall_abort_after > 0:
+                    if getattr(self.agent, 'stall_landing', False) and not landing:
+                        # 收口轮：只给 finish，让 agent 把已取得的证据交出来
+                        landing = True
+                        stalled_turns = 0
+                        messages.append({"role": "user", "content": LANDING_NUDGE})
+                        continue
                     return LoopResult(
                         Outcome.BLOCKED,
                         STALL_ABORT.format(n=stalled_turns, where=_where(steps)),
@@ -409,6 +435,14 @@ class AgentLoop:
             missing = [k for k in self.required_facts if not str(facts.get(k, "")).strip()]
             if missing:
                 messages.append(_tool_message(call_id, missing_facts_message(missing)))
+                return None
+
+        # 交卷闸：调用方注入的最终检查不过 → 退回一次让模型补齐再交
+        if self.finish_check and self._finish_bounces < 1:
+            bounce = self.finish_check(dict(args.get("facts") or {}))
+            if bounce:
+                self._finish_bounces += 1
+                messages.append(_tool_message(call_id, bounce))
                 return None
 
         self._record(Step(len(steps) + 1, "finish", args, str(args.get("summary", "")),

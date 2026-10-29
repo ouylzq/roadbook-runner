@@ -30,6 +30,9 @@
   你自己跑判分只会因为 judgment 不存在拿到无意义的 BLOCK。
 - 只有被环境真正卡住（页面/接口/权限走不通、重试无果）才 outcome=blocked，并写清卡点；
   前面流程走通、只是到了 intent 规定的停止点，不是 blocked。
+- **清理动作不要在跑批中执行**：intent 的「清理」小节是结案后的清理说明书——把要清理的
+  project_id 和清理方法写进 finish 的结论与事实即可；裁判要验证的恰恰是你发布后的状态，
+  你提前清理=销毁证据，整场只能判 BLOCK。真实清理在裁判出结论后由 cleanup 脚本/人工执行。
 
 ${atom_memory}${env_line}把裁判需要的事实放进 finish 的 facts 里，字段名照 intent.md「留给裁判的事实」写。
 ${facts_contract}

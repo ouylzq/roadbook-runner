@@ -52,11 +52,20 @@ class Run:
     playbook_after: int = 0            # 收尾时记到第几步
     questions: list[str] = field(default_factory=list)   # needs_input 时等人回答的问题
     resumable: bool = False            # 现场已冻结，可以接着跑
+    # 裁判质疑判据：判定照旧出（该 blocked 的 blocked），但裁判认为某条判据本身写错了——
+    # 在指定页面找不到、亲眼看到该字段在别的位置。挂起等人决定：采纳建议改判据后重判，
+    # 或维持原判。pending_status/pending_verdict 存着按原判据算出的结论，维持原判时直接恢复。
+    criteria_issues: list[dict[str, Any]] = field(default_factory=list)
+    pending_status: str = ""
+    pending_verdict: str = ""
     error: str | None = None
     # 外部迁移来的历史记录（roadbook/runs/ 时代、Claude Code 跑出来的）：只有文字产物，
     # 没有轨迹和录屏。看板据此隐藏录屏/轨迹区块、在历史列表里打「外部」标。
     external: bool = False
     source: str = ""                   # external 时指向原始目录，供追溯
+    # 仅重判的 run 指向被复用的原始跑批（root）。空 = 正常跑批。
+    # 判据（expect.yaml）改错或裁判卡死时，不重跑 runner、只重新取证——这条字段就是两者的关联。
+    rejudge_of: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

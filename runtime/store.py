@@ -8,8 +8,10 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +45,26 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     cache_write_tokens INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_llm_calls_run ON llm_calls(run_id, seq);
+
+CREATE TABLE IF NOT EXISTS cleanup_tasks (
+    id         TEXT PRIMARY KEY,
+    run_id     TEXT NOT NULL,
+    scenario   TEXT NOT NULL,
+    script     TEXT NOT NULL,
+    args_json  TEXT NOT NULL DEFAULT '[]',
+    state      TEXT NOT NULL DEFAULT 'pending',
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    next_at    TEXT NOT NULL,
+    hold_until TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_cleanup_state ON cleanup_tasks(state, next_at);
 """
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).astimezone().isoformat(timespec="seconds")
 
 
 class Store:
@@ -63,6 +84,9 @@ class Store:
         for col in ("cache_read_tokens", "cache_write_tokens"):
             if col not in have:
                 self._conn.execute(f"ALTER TABLE llm_calls ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
+        have = {row["name"] for row in self._conn.execute("PRAGMA table_info(cleanup_tasks)")}
+        if "hold_until" not in have:
+            self._conn.execute("ALTER TABLE cleanup_tasks ADD COLUMN hold_until TEXT NOT NULL DEFAULT ''")
 
     # ---- 每个场景的运行记录 -----------------------------------------------------
     def upsert_run(self, *, run_id: str, scenario: str, skill: str, status: str,
@@ -115,6 +139,96 @@ class Store:
                 "SELECT * FROM llm_calls WHERE run_id = ? ORDER BY seq", (run_id,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def upsert_cleanup_task(self, *, task_id: str, run_id: str, scenario: str, script: str,
+                            args: list[str], state: str, attempts: int = 0,
+                            last_error: str = "", next_at: str, hold_until: str = "") -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                '''INSERT INTO cleanup_tasks (id, run_id, scenario, script, args_json, state,
+                                             attempts, last_error, created_at, next_at, hold_until)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET state = excluded.state,
+                     attempts = excluded.attempts, last_error = excluded.last_error,
+                     next_at = excluded.next_at, hold_until = excluded.hold_until''',
+                (task_id, run_id, scenario, script, json.dumps(args, ensure_ascii=False),
+                 state, attempts, last_error, _now_iso(), next_at, hold_until),
+            )
+
+    def cleanup_tasks_for_run(self, run_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM cleanup_tasks WHERE run_id = ? ORDER BY id", (run_id,)).fetchall()
+        return [dict(row) for row in rows]
+
+    def hold_cleanup(self, run_id: str, until: str) -> int:
+        """续租：把该 run 名下还没执行的任务推迟到 until。hold 窗口给
+        「修判据 → 只重跑裁判」留时间；只动 pending/retry，done/failed 不 resurrect。"""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE cleanup_tasks SET hold_until = ?, "
+                "next_at = MAX(next_at, ?) WHERE run_id = ? AND state IN ('pending','retry')",
+                (until, until, run_id))
+        return cur.rowcount
+
+    def release_cleanup(self, run_id: str, now_iso: str) -> int:
+        """重判落了 PASS：解除保持，下次调度立即执行。"""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE cleanup_tasks SET hold_until = '', next_at = ? "
+                "WHERE run_id = ? AND state IN ('pending','retry')", (now_iso, run_id))
+        return cur.rowcount
+
+    def claim_cleanup_task(self, task_id: str, now_iso: str) -> bool:
+        """原子占位：只有还能被调度（pending/retry 且到期）时才改成 running。
+        堵住「查出来 → 执行」之间和续租/重判竞态的窗口。"""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE cleanup_tasks SET state = 'running' "
+                "WHERE id = ? AND state IN ('pending','retry') AND next_at <= ?",
+                (task_id, now_iso))
+        return cur.rowcount == 1
+
+    def reset_running_cleanup(self) -> int:
+        """启动清扫：进程死了留下的 running 任务回 retry（15 分钟后重试）。"""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE cleanup_tasks SET state = 'retry' WHERE state = 'running'")
+        return cur.rowcount
+
+    def rejudges_of(self, root: str) -> list[dict[str, Any]]:
+        """root 的全部重判记录（新→旧）。run_id 形如 `<root>+rejudge<HHMMSS>`，
+        LIKE 前要先转义 root 里的 % _ \\。"""
+        escaped = root.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT run_id, status, verdict, started_at, finished_at FROM runs "
+                "WHERE run_id LIKE ? ESCAPE '\\' ORDER BY started_at DESC",
+                (escaped + "+rejudge%",)).fetchall()
+        return [dict(row) for row in rows]
+
+    def due_cleanup_tasks(self, now_iso: str, limit: int = 10) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM cleanup_tasks WHERE state IN ('pending','retry') AND next_at <= ? "
+                "ORDER BY next_at LIMIT ?", (now_iso, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def all_cleanup_tasks(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM cleanup_tasks ORDER BY created_at DESC LIMIT ?", (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_cleanup_state(self, task_id: str, state: str, attempts: int,
+                          last_error: str = "", next_at: str = "") -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE cleanup_tasks SET state = ?, attempts = ?, last_error = ?, next_at = ? WHERE id = ?",
+                (state, attempts, last_error, next_at, task_id),
+            )
 
     def close(self) -> None:
         with self._lock:

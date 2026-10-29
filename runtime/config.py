@@ -31,7 +31,13 @@ class Settings:
     # 跑不动时的闸门。这里是全局默认值，单个子代理可以在 agents/<名字>.md 的
     # frontmatter 里覆盖（runner 和裁判的节奏不一样，不该共用一套数）。
     stall_nudge_after: int          # 环境连续几轮没变化 → 往对话里插一条提醒
-    stall_abort_after: int          # 再撑几轮还是没变化 → 直接收口判 blocked
+    stall_abort_after: int          # 再撑几轮还是没变化 → 直接收口
+    stall_landing: bool             # 停滞后进收口轮（只给 finish），裁判默认开；runner 不用
+
+    # prod 围栏：默认不许从看板触发线上跑批
+    allow_prod: bool
+    # 跑批结束推飞书（自定义机器人 webhook）。空 = 不推
+    webhook_url: str
     max_wall_seconds: int           # 单个 agent 的墙上时钟上限，0 = 不限
     max_total_tokens: int           # 单个 agent 累计 prompt token 上限，0 = 不限
     dedupe_observations: bool       # 页面没变时 observe 只回一句「跟上次一样」
@@ -39,6 +45,8 @@ class Settings:
     compact_at_tokens: int          # 上下文涨到这个数就压缩重建一次，0 = 不压缩
     keep_recent_turns: int          # 压缩时保留最近几轮原文（0 = 只留摘要）
     max_concurrent_runs: int        # 同时最多几个跑批在跑，0 = 不限；超过的排队等空位
+    # 结论非 PASS 的清理任务保持窗口：给「修判据 → 只重跑裁判」留时间，别证据一落地就被清掉
+    cleanup_hold_hours: float
 
     # Vercel Deployment Protection。密钥只由浏览器驱动按精确 host 白名单加到请求头，
     # 不进 roadbook 资产、模型提示词、运行日志或录屏。
@@ -52,12 +60,6 @@ class Settings:
     atom_refutes_drop: int          # 候选被几票否决就丢
     atom_refutes_demote: int        # 已落盘的条目被几个不同跑批否决就划掉（预留，这版不做）
     atom_pending_ttl_days: int      # 候选多少天没人验证就过期
-
-    # prod 围栏：默认不许从看板触发线上（prod）跑批——prod 建出来的用户删不掉，
-    # 注册类用例还要人工点头。要对线上跑回归的人显式打开（QA_AGENT_ALLOW_PROD=on）。
-    allow_prod: bool
-    # 跑批结束推飞书（自定义机器人 webhook）。空 = 不推；推送失败只记日志，不影响结论。
-    webhook_url: str
 
     @property
     def agents_dir(self) -> Path:
@@ -122,6 +124,9 @@ class Settings:
             default_target_url=os.getenv("QA_AGENT_TARGET_URL", "http://localhost:4173/"),
             stall_nudge_after=int(os.getenv("QA_AGENT_STALL_NUDGE_AFTER", "6")),
             stall_abort_after=int(os.getenv("QA_AGENT_STALL_ABORT_AFTER", "10")),
+            stall_landing=_env_flag("QA_AGENT_STALL_LANDING", False),
+            allow_prod=_env_flag("QA_AGENT_ALLOW_PROD", False),
+            webhook_url=os.getenv("QA_AGENT_WEBHOOK_URL", "").strip(),
             # 墙上时钟默认给得很松：实测跑通的场次模型耗时 262~512 秒，再加等待也远够用。
             # 它防的是「挂住不动」，不是「跑得慢」——真正分辨卡死的是上面两个。
             max_wall_seconds=int(os.getenv("QA_AGENT_MAX_WALL_SECONDS", "1800")),
@@ -140,6 +145,7 @@ class Settings:
             # 也容易撞上共用固定账号的场景（login 那类）互相抢发码配额。
             # 超过上限不拒绝——排队等空位，跑批发起方不用重试。
             max_concurrent_runs=int(os.getenv("QA_AGENT_MAX_CONCURRENT_RUNS", "10")),
+            cleanup_hold_hours=float(os.getenv("QA_AGENT_CLEANUP_HOLD_HOURS", "4")),
             vercel_bypass_secret=os.getenv("VERCEL_AUTOMATION_BYPASS_SECRET", "").strip(),
             vercel_bypass_hosts=tuple(
                 host.strip().lower()
@@ -155,8 +161,6 @@ class Settings:
             atom_refutes_drop=int(os.getenv("QA_AGENT_ATOM_REFUTES_DROP", "1")),
             atom_refutes_demote=int(os.getenv("QA_AGENT_ATOM_REFUTES_DEMOTE", "2")),
             atom_pending_ttl_days=int(os.getenv("QA_AGENT_ATOM_PENDING_TTL_DAYS", "30")),
-            allow_prod=_env_flag("QA_AGENT_ALLOW_PROD", False),
-            webhook_url=os.getenv("QA_AGENT_WEBHOOK_URL", "").strip(),
         )
 
 

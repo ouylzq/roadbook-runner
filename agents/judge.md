@@ -1,5 +1,8 @@
 ---
 name: judge
+stall_nudge_after: 5
+stall_abort_after: 10
+stall_landing: true
 description: 独立裁判。没参与执行，只按验收路线取证判定，证据必须是页面原文。
 tools: [observe, navigate, click, find, grep_page, eval_js, wait, scroll, read_resource, finish]
 max_iterations: 45

@@ -11,11 +11,25 @@
     --mono:'SF Mono',Menlo,Consolas,monospace;
     /* 工具类别配色：改页面 / 看页面 / 资产·脚本 */
     --act:#0d7a70; --look:#5b6b65; --asset:#5a4fc4;
+    /* 判定结果的语义派生色：例外行浅底、结果标签底。亮色主题配比低 */
+    --pass-soft:color-mix(in srgb,var(--pass) 7%,var(--surface));
+    --fail-soft:color-mix(in srgb,var(--fail) 8%,var(--surface));
+    --block-soft:color-mix(in srgb,var(--block) 10%,var(--surface));
+    --pass-tag:color-mix(in srgb,var(--pass) 14%,transparent);
+    --fail-tag:color-mix(in srgb,var(--fail) 14%,transparent);
+    --block-tag:color-mix(in srgb,var(--block) 18%,transparent);
   }
   @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
     --bg:#0d1412; --surface:#151e1b; --surface-2:#1c2724; --ink:#e6ece9; --muted:#92a19b;
     --line:#293633; --accent:#3fc7ba; --pass:#4ec98a; --fail:#f2857c; --block:#e0a15c;
     --act:#3fc7ba; --look:#8fa39c; --asset:#9d93ff;
+    /* 暗底上配比要调高，否则浅色底/标签被吃掉看不见（v3 被说「没颜色」的根因） */
+    --pass-soft:color-mix(in srgb,var(--pass) 12%,var(--surface));
+    --fail-soft:color-mix(in srgb,var(--fail) 15%,var(--surface));
+    --block-soft:color-mix(in srgb,var(--block) 15%,var(--surface));
+    --pass-tag:color-mix(in srgb,var(--pass) 22%,transparent);
+    --fail-tag:color-mix(in srgb,var(--fail) 26%,transparent);
+    --block-tag:color-mix(in srgb,var(--block) 26%,transparent);
   }}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -238,6 +252,51 @@
          background:var(--accent);color:#fff;padding:6px 14px;font-weight:600;font-size:12.5px}
   button:disabled{opacity:.45;cursor:not-allowed}
   button.ghost{background:transparent;color:var(--accent);padding:5px 10px;font-weight:500}
+  /* 重判按钮：复核性质的动作，和「跑一下」（全量、扣积分）必须在观感上分开——
+     虚线描边 + 打勾前缀，一眼是「复核」不是「再跑一遍」 */
+  button.rj{border-style:dashed;color:var(--pass)}
+  button.rj::before{content:'⚖ ';}
+  button.rj:hover{border-color:var(--pass);border-style:solid}
+  /* 应用内确认弹窗（替代浏览器原生 confirm） */
+  .cfm-row{padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;line-height:1.7}
+  .cfm-row:last-child{border-bottom:none}
+  .cfm-row .k{display:inline-block;background:color-mix(in srgb,var(--pass) 10%,var(--surface));
+    color:var(--pass);border-radius:4px;padding:0 7px;font-weight:600;margin-right:4px}
+  /* 判据质疑卡：专业层级规范——一行弱化的元信息 → diff（唯一视觉重点）→ 右下唯一主按钮。
+     语义色只允许出现在 diff 标记上；药丸、按钮、编辑框一律中性灰阶，不再各抢各的。 */
+  .crit-card{margin-bottom:18px}
+  .crit-meta{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.7}
+  .crit-meta b{font-family:var(--mono);font-weight:600;color:var(--ink)}
+  .crit-diff{background:color-mix(in srgb,var(--accent) 4%,var(--surface));
+    border:1px solid var(--line);border-radius:8px;padding:13px 16px;
+    font-size:14px;line-height:2.1}
+  .crit-tools{display:flex;justify-content:flex-end;margin-top:5px}
+  .crit-tools button{background:none;border:none;color:var(--muted);font-size:12px;
+    cursor:pointer;padding:3px 6px}
+  .crit-tools button:hover{color:var(--accent)}
+  .crit-edit{margin-top:8px}
+  .crit-edit textarea{width:100%;min-height:64px;font:13px/1.7 var(--mono);
+    border:1px solid var(--line);border-radius:8px;background:var(--surface);
+    padding:9px 11px;color:var(--ink);resize:vertical;outline:none}
+  .crit-edit textarea:focus{border-color:var(--accent)}
+  .crit-note{font-size:12px;color:var(--muted);line-height:1.8;margin:0 0 14px}
+  .crit-footer{display:flex;gap:9px;align-items:center;margin-top:4px}
+  .crit-obs{margin-top:10px}
+  .crit-obs summary{cursor:pointer;font-size:12px;color:var(--muted);user-select:none}
+  .crit-obs summary:hover{color:var(--accent)}
+  .crit-obs-body{font-size:12.5px;color:var(--ink);background:var(--surface);
+    border:1px solid var(--line);border-radius:6px;padding:9px 11px;margin-top:7px;line-height:1.7}
+  /* 变量芯片：弱化为浅底 mono 小片，无边框不抢戏；值保持主题色 */
+  .varchip{display:inline-block;background:color-mix(in srgb,var(--accent) 7%,var(--surface));
+    border-radius:4px;padding:0 5px;font-family:var(--mono);font-size:12px;
+    color:var(--muted);white-space:nowrap;margin:0 1px}
+  .varchip b{color:var(--accent);font-weight:600}
+  .varchip.miss{background:color-mix(in srgb,var(--fail) 7%,var(--surface))}
+  /* diff 标记是唯一允许用语义色的地方——删除柔和红、新增柔和绿，不加大字重不加外框 */
+  del.d{color:var(--fail);text-decoration:line-through;
+    background:color-mix(in srgb,var(--fail) 8%,transparent);border-radius:3px;padding:0 1px}
+  ins.d{color:var(--pass);text-decoration:none;
+    background:color-mix(in srgb,var(--pass) 13%,transparent);border-radius:3px;padding:0 2px}
   button.danger{background:transparent;border-color:var(--fail);color:var(--fail);padding:5px 10px;font-weight:500}
 
   dialog{border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);
@@ -370,33 +429,81 @@
 
   /* 判定结果：把「验收路线规定的」和「这次裁判跑出来的」在视觉上彻底分开。
      混在一起时人分不清哪句是标准、哪句是实测——两者性质完全不同。 */
-  .jg{display:grid;gap:14px;background:var(--bg);padding:14px;border-radius:10px}
-  .jg-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);align-items:center}
-  .jg-legend i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px;
-               vertical-align:-1px;border:1px solid var(--line)}
-  .jg-step{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);
-           box-shadow:0 1px 3px rgba(0,0,0,.07)}
-  .jg-step>header{display:flex;align-items:flex-start;gap:9px;padding:9px 12px 9px 10px;
-                  background:var(--surface-2);border-bottom:1px solid var(--line);
-                  border-left:3px solid var(--line);font-size:13px;line-height:1.7}
-  .jg-no{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;flex:none;
-         border-radius:999px;background:var(--accent);color:#fff;font:700 11px var(--mono);margin-top:1px}
-  .jg .lbl{display:block;font:10.5px var(--mono);color:var(--muted);margin-bottom:2px;letter-spacing:.02em}
-  .jg-body{padding:10px 12px;display:grid;gap:10px}
-  .jg-ran{display:grid;grid-template-columns:62px 1fr;gap:6px 10px;align-items:baseline;
-          font-size:12.5px;line-height:1.7;padding:8px 11px;border-radius:6px;
-          background:color-mix(in srgb,var(--accent) 7%,transparent);
-          border-left:3px solid color-mix(in srgb,var(--accent) 45%,transparent)}
-  .jg-ran .k{font:11.5px var(--mono);color:var(--muted)}
-  .jg-check{border:1px solid var(--line);border-radius:6px;overflow:hidden}
-  .jg-spec{padding:9px 11px;background:var(--surface-2);font-size:13px;line-height:1.75;
-           border-left:3px solid var(--line)}
-  .jg-got{padding:9px 11px;display:grid;gap:7px;font-size:12.5px;line-height:1.7;
-          border-left:3px solid color-mix(in srgb,var(--accent) 45%,transparent)}
-  .jg-evi{white-space:pre-wrap;word-break:break-word;color:var(--ink);font-size:12.5px;
-          border-left:2px solid var(--accent);padding:5px 10px;background:var(--surface-2);
-          border-radius:0 4px 4px 0}
-  .jg-note{color:var(--muted);font-size:12px}
+  /* 判定结果：颜色给例外，文字按需折叠（deep-planner 设计规格）。
+     扫视四层：顶部分段色带 → 步骤编号实心圆+色点 → 判据左侧实色条+实心图标 → 例外行浅底+标签。
+     how / evidence 用 <details> 原生折叠：summary 本身就是 1 行截断的原文，展开即全文，导出件无需 JS。 */
+  .jg{display:grid;gap:10px}
+  .jg-top{display:flex;align-items:center;gap:14px;padding:2px 0}
+  .jg-bar{display:flex;gap:6px;flex:1;min-width:120px;max-width:320px}
+  .jg-bar>span{display:flex;gap:2px;flex:var(--n) 1 0}
+  .jg-bar i{flex:1;height:6px;border-radius:2px;background:var(--line)}
+  .jg-tally{font-size:12.5px;color:var(--muted);white-space:nowrap}
+  .jg-tally b{font:700 13px var(--mono);margin-right:2px}
+  .jg-tally .pass b{color:var(--pass)} .jg-tally .fail b{color:var(--fail)} .jg-tally .blocked b{color:var(--block)}
+  .jg-tally .miss{color:var(--block)}
+
+  .jg-step{border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+  .jg-head{display:flex;align-items:flex-start;gap:10px;padding:9px 14px 9px 12px;
+           background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+  .jg-no{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+         font:700 11px/1 var(--mono);color:var(--surface);background:var(--muted)}
+  .jg-go{flex:1;min-width:0;font-size:13px;font-weight:600;line-height:20px;color:var(--ink);overflow-wrap:anywhere}
+  .jg-go.empty{color:var(--muted);font-weight:500}
+  .jg-dots{flex:none;display:flex;align-items:center;gap:3px;height:20px}
+  .jg-dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+  .jg-sum{flex:none;font-size:12px;font-weight:600;line-height:20px;white-space:nowrap}
+
+  .jg-nav{display:flex;align-items:flex-start;gap:8px;padding:6px 14px 7px 12px;
+          border-top:1px solid var(--line);font-size:12px;line-height:20px;color:var(--muted)}
+  .jg-reach{flex:none;height:20px;padding:0 7px;border-radius:4px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .jg-reach.ok{color:var(--pass);background:var(--pass-tag)}
+  .jg-reach.no{color:var(--block);background:var(--block-tag)}
+  .jg-lbl{flex:none;font-weight:600}
+  .jg-plain{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+
+  /* 折叠件：summary = 截断原文；[open] 去掉截断 */
+  .jg-fold{flex:1;min-width:0}
+  .jg-fold>summary{display:block;list-style:none;cursor:pointer;border-radius:3px}
+  .jg-fold>summary::-webkit-details-marker{display:none}
+  .jg-fold>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .jg-row{display:flex;align-items:flex-start;gap:6px}          /* summary 内再包一层 flex：Safari 的 summary 不可靠地当 flex 容器 */
+  .jg-row::before{content:'▸';flex:none;width:10px;font-size:10px;color:var(--muted)}
+  .jg-fold[open]>summary .jg-row::before{content:'▾'}
+  .jg-clip{flex:1;min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;
+           overflow:hidden;overflow-wrap:anywhere}
+  .jg-fold[open]>summary .jg-clip{display:block;-webkit-line-clamp:unset;white-space:pre-wrap}
+  .jg-fold>summary:hover .jg-clip,.jg-fold>summary:hover .jg-row::before{color:var(--ink)}
+  .jg-more{flex:none;font-size:11.5px;color:var(--accent);font-weight:500}
+  .jg-fold[open] .jg-more{display:none}
+  .jg-fold-body{margin:4px 0 0 16px;font-size:12px;line-height:1.7;color:var(--muted);
+                white-space:pre-wrap;overflow-wrap:anywhere}
+  .jg-k{font-weight:600;margin-right:6px}
+
+  .jg-checks{border-top:1px solid var(--line)}
+  .jg-check{display:grid;grid-template-columns:18px minmax(0,1fr) auto;column-gap:10px;row-gap:3px;
+            padding:10px 14px 10px 11px;border-left:3px solid var(--line)}
+  .jg-check+.jg-check{border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+  .jg-ico{grid-column:1;width:18px;height:18px;margin-top:2px;border-radius:50%;display:grid;place-items:center;
+          font:700 11px/1 system-ui,sans-serif;color:var(--surface);background:var(--muted)}
+  .jg-fact{grid-column:2;font-size:13.5px;line-height:22px;color:var(--ink);overflow-wrap:anywhere}
+  .jg-tag{grid-column:3;align-self:start;margin-top:1px;height:20px;line-height:20px;padding:0 8px;
+          border-radius:4px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .jg-evi{grid-column:2 / 4;font-size:12.5px;line-height:1.7;color:var(--muted)}
+  .jg-evi.jg-plain{padding-left:16px}                            /* 与折叠件 ▸ 后的正文左对齐 */
+
+  /* 语义色：一处定义，四层共用 */
+  .jg-check.pass{border-left-color:var(--pass)}
+  .jg-check.fail{border-left-color:var(--fail);background:var(--fail-soft)}
+  .jg-check.blocked{border-left-color:var(--block);background:var(--block-soft)}
+  .jg-check.pass .jg-ico,.jg-no.pass,.jg-dots i.pass,.jg-bar i.pass{background:var(--pass)}
+  .jg-check.fail .jg-ico,.jg-no.fail,.jg-dots i.fail,.jg-bar i.fail{background:var(--fail)}
+  .jg-check.blocked .jg-ico,.jg-no.blocked,.jg-dots i.blocked,.jg-bar i.blocked{background:var(--block)}
+  .jg-check.fail .jg-tag{color:var(--fail);background:var(--fail-tag)}
+  .jg-check.blocked .jg-tag{color:var(--block);background:var(--block-tag)}
+  .jg-sum.pass{color:var(--pass)} .jg-sum.fail{color:var(--fail)} .jg-sum.blocked{color:var(--block)}
+
+  @media print{ .jg-clip{display:block!important;-webkit-line-clamp:unset!important;white-space:pre-wrap}
+                .jg-row::before,.jg-more{display:none} }
   .res{font-weight:700;padding:1px 7px;border-radius:3px;font-size:11.5px;white-space:nowrap}
   .res.pass{background:color-mix(in srgb,var(--pass) 18%,transparent);color:var(--pass)}
   .res.fail{background:color-mix(in srgb,var(--fail) 18%,transparent);color:var(--fail)}
@@ -700,6 +807,7 @@
         style="width:9px;height:9px;border-radius:50%;background:#cbd5e1;display:inline-block"></span>
   <button class="link" id="onboard-btn" onclick="toggleOnboard()">第一次用？</button>
   <button class="ghost" onclick="openHistory()">历史</button>
+  <button class="ghost" onclick="openCleanup()">清理</button>
   <button class="ghost" onclick="openGlobalCfg()">环境配置</button>
   <button class="ghost" onclick="openMemory()">记忆<span class="cnt" id="mem-count" hidden></span></button>
   <button class="ghost" onclick="runAll()">全部跑一遍</button>
@@ -726,7 +834,7 @@
 <dialog id="cfgdlg"><div class="dlg-head">
     <b style="font-size:14px">环境配置（全局 · 所有场景共用）</b>
     <span style="margin-left:auto"></span>
-    <button class="ghost" onclick="renderGlobalCfg()">刷新</button>
+    <button class="ghost" onclick="openGlobalCfg()">刷新</button>
     <button class="ghost" onclick="document.querySelector('#cfgdlg').close()">关闭</button>
   </div><div class="dlg-body" id="global-cfg" style="min-width:560px">
     <span class="hint">读取中…</span>
@@ -746,6 +854,15 @@
     <span class="hint">读取中…</span>
   </div></dialog>
 
+<dialog id="cleandlg"><div class="dlg-head">
+    <b style="font-size:14px">清理 · 垃圾回收点</b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="renderCleanup()">刷新</button>
+    <button class="ghost" onclick="document.querySelector('#cleandlg').close()">关闭</button>
+  </div><div class="dlg-body" id="clean-body" style="min-width:680px">
+    <span class="hint">读取中…</span>
+  </div></dialog>
+
 <dialog id="ask"><div class="dlg-head">
     <b id="ask-title" style="font-family:var(--mono);font-size:13px"></b>
     <span style="margin-left:auto"></span>
@@ -758,6 +875,24 @@
       <button onclick="submitAnswers()">回答并接着跑</button>
       <span class="hint" id="ask-status"></span>
     </div>
+  </div></dialog>
+
+<dialog id="criteria"><div class="dlg-head">
+    <b style="font-size:14px">裁判对判据有疑问 · 等你裁决</b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="document.querySelector('#criteria').close()">关闭</button>
+  </div><div class="dlg-body" id="criteria-body" style="min-width:620px">
+    <span class="hint">读取中…</span>
+  </div></dialog>
+
+<dialog id="cfm"><div class="dlg-head">
+    <b id="cfm-title" style="font-size:14px"></b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="document.querySelector('#cfm').close()">关闭</button>
+  </div><div class="dlg-body" id="cfm-body" style="min-width:460px;padding-top:14px"></div>
+  <div style="display:flex;gap:9px;justify-content:flex-end;padding:0 18px 16px">
+    <button class="ghost" id="cfm-cancel">取消</button>
+    <button class="primary" id="cfm-ok">确定</button>
   </div></dialog>
 
 <dialog id="pbed"><div class="dlg-head">
@@ -830,7 +965,9 @@
     <div class="au-foot">
       <button id="author-go" onclick="submitAuthor()">生成</button>
       <button class="ghost" id="author-save-draft" onclick="saveNamedDraft()" title="⌘S" hidden>存为草稿</button>
+      <span class="hint" id="author-elapsed"></span>
       <span class="hint" id="author-status"></span>
+      <div id="author-progress" style="margin-top:6px"></div>
     </div>
     <div class="authlog" id="author-log"></div>
   </div></dialog>
@@ -857,6 +994,8 @@
     <b id="dlg-title" style="font-family:var(--mono);font-size:13px"></b>
     <span id="dlg-pill"></span>
     <span style="margin-left:auto"></span>
+    <button class="ghost rj" id="dlg-rj" hidden title="只重新取证判分，不重跑执行、不再扣积分"
+      onclick="rejudgeCurrent()">重跑裁判</button>
     <button class="ghost" onclick="exportRunHtml()">导出 HTML</button>
     <button class="ghost" onclick="dlg.close()">关闭</button>
   </div><div class="dlg-body" id="dlg-body"></div></dialog>
@@ -871,6 +1010,15 @@ let ALLOW_PROD = false;         // 服务端围栏的镜像，只管把不该有
 async function load(){
   const skills = await (await fetch('/api/skills')).json();
   state = skills.flatMap(sk => sk.scenarios.map(s => ({...s, skill: sk.name})));
+  // 断线收敛：SSE 静默死掉（休眠/断网/刷新）时 running 表里会有残留项，卡片永远显示"跑着"。
+  // 以服务端最新状态为准——run 已经出结论就收敛掉，并触发 onDone（和正常收到 done 一样）。
+  for(const s of state){
+    const r = running[s.name];
+    if(r && s.last && s.last.run_id === r.run_id && s.last.status !== 'running'){
+      delete running[s.name];
+      if(r.onDone){ try{ r.onDone(); }catch(e){} }
+    }
+  }
   SKILL_PROJECTS = [...new Set(skills.flatMap(sk => sk.projects || []))];
   render();
   reattachRunning();
@@ -965,6 +1113,15 @@ function render(){
     }).join('')}</div>` : '';
 
   const shown = state.filter(s => FILTER === 'all' || bucketOf(s) === FILTER);
+  // 全量重绘前，把还在跑的卡的 LIVE 画面 <img> 先摘下来——元素不重建，MJPEG 流就不断。
+  // 没有这一步，8 秒一次的后台刷新会让实时画面反复重连闪屏（这也是过去
+  // 「有跑批就干脆停止后台刷新」那个错误方案的由来：它让整块看板的状态全部冻结）。
+  const keepLive = {};
+  document.querySelectorAll('.tile.running[data-scenario]').forEach(t => {
+    const img = t.querySelector('img[src*="live.mjpeg"]');
+    const name = t.getAttribute('data-scenario');
+    if(running[name] && img) keepLive[name] = img;
+  });
   const tileHtml = s => {
     const r = running[s.name];
     const verdict = r ? 'running' : (s.last?.verdict || s.last?.status || '');
@@ -980,6 +1137,8 @@ function render(){
             ${s.title ? `<div class="slug">${esc(s.name)}</div>` : ''}
           </div>
           ${verdict ? `<span class="pill ${verdict}" title="${VERDICT_HELP[verdict]||''}">${verdict}</span>` : ''}
+          ${!r && s.last && (s.last.run_id||'').includes('+rejudge')
+            ? `<span class="hint" title="最新结论来自仅重判（${esc(s.last.run_id.split('+rejudge')[0])}）">重判</span>` : ''}
         </div>
         <div class="desc">${esc(s.description || '')}</div>
         <div class="status">
@@ -990,14 +1149,18 @@ function render(){
         </div>
       </div>
       <div class="actions">
-        ${s.last && s.last.status === 'needs_input'
+        ${s.last && s.last.status === 'needs_input' && !s.last.criteria_pending
           ? `<button class="primary" onclick="openAsk('${s.last.run_id}','${s.name}')">回答 →</button>` : ''}
+        ${s.last && s.last.status === 'needs_input' && s.last.criteria_pending
+          ? `<button class="primary" onclick="openCriteria('${s.last.run_id}')">判据待定 →</button>` : ''}
         <button class="ghost sm" onclick="openPlaybook('${s.name}','${s.skill}')">改要求</button>
         ${s.last ? `<button class="ghost sm" onclick="detail('${s.last.run_id}')">看结论</button>` : ''}
         <span class="sp"></span>
         ${r ? `<button class="danger sm" onclick="stopRun('${r.run_id}','${s.name}')" ${r.stopping?'disabled':''}>
                  ${r.stopping?'停止中…':'停止'}</button>`
             : ''}
+        ${!r && s.rejudge ? `<button class="ghost sm rj" title="复核 ${esc(s.rejudge.verdict || '')} 那次结论：只重新取证判分，不重跑执行、不再扣积分"
+            onclick="rejudgeFromCard('${esc(s.name)}','${esc(s.rejudge.run_id)}')">重跑裁判</button>` : ''}
         ${envPicker(s, r)}
         <button class="primary sm" onclick="run('${s.name}','${s.skill}')" ${r?'disabled':''}>
           ${r?'跑着…':'跑一下'}</button>
@@ -1017,6 +1180,12 @@ function render(){
     g.items.map(tileHtml).join('')
   ).join('') || (state.length ? `<div class="empty">这一类里没有场景。<a href="#" onclick="setFilter('all');return false">看全部</a></div>`
                                : '<div class="empty">没找到场景，检查技能目录</div>');
+  // LIVE 画面原样搬回新卡：img 元素沿用旧的，流就不会断
+  for(const [name, img] of Object.entries(keepLive)){
+    const stage = document.querySelector(`.tile.running[data-scenario="${CSS.escape(name)}"] .stage`);
+    const fresh = stage && stage.querySelector('img');
+    if(stage && fresh) stage.replaceChild(img, fresh);
+  }
 }
 
 // 跑哪个环境。`envs: [dev, prod]` 这行早就写在 intent.md 的 frontmatter 里了，
@@ -1059,8 +1228,8 @@ async function run(name, skill){
 
 // 盯住一个在跑的跑批：实时画面 + 步骤推送。发起跑批和「刷新后重新接上」共用这一条路——
 // 以前订阅逻辑长在 run() 里面，页面一刷新就再也接不回去了。
-function attach(name, run_id, step = '启动中…'){
-  running[name] = {run_id, step, phase:'执行中'};
+function attach(name, run_id, step = '启动中…', onDone = null){
+  running[name] = {run_id, step, phase:'执行中', onDone};
   render();
 
   const es = new EventSource(`/api/runs/${run_id}/events`);
@@ -1073,7 +1242,11 @@ function attach(name, run_id, step = '启动中…'){
     if(kind === 'step' || kind === 'judge_step'){
       cur.step = `${payload.n}. ${payload.tool} ${JSON.stringify(payload.args||{}).slice(0,60)}`;
     }
-    if(kind === 'done'){ es.close(); delete running[name]; load(); return; }
+    if(kind === 'done'){
+      es.close(); delete running[name]; load();
+      if(cur.onDone) cur.onDone();
+      return;
+    }
     // 只刷新那张卡的文字层，别重建 img 否则 MJPEG 流会断。
     // 卡片重排过之后（标题从目录名换成 title/slug）这里曾经按 .name 找卡片——
     // 那个 class 早就不存在了，选择器永远找不到，这段代码悄悄失效了快一天：
@@ -1135,12 +1308,63 @@ async function renderHistory(){
       }
       return `<tr class="hrow" onclick="detail('${r.run_id}')">
         <td class="mono">${esc((r.run_id || '').slice(0, 15))}</td>
-        <td>${esc(r.scenario || '')}${r.external ? ' <span class="hint" title="roadbook/runs/ 时代的外部记录：只有文字产物，没有轨迹和录屏">外部</span>' : ''}</td>
+        <td>${esc(r.scenario || '')}${r.external ? ' <span class="hint" title="roadbook/runs/ 时代的外部记录：只有文字产物，没有轨迹和录屏">外部</span>' : ''}${r.rejudge_of ? ` <span class="hint" title="只重跑了裁判（原跑批 ${esc(r.rejudge_of)}），没重跑执行">重判</span>` : ''}</td>
         <td>${esc(r.env || '-')}</td>
         <td><span class="pill ${esc(v)}" title="${VERDICT_HELP[v]||''}">${esc(v)}</span></td>
         <td>${dur}</td>
         <td class="go">看 →</td></tr>`;
     }).join('')}</tbody></table>`;
+}
+
+// ---- 清理 · 垃圾回收点视图：台账、保持窗口倒计时、一键立即清理 ----
+const CLEAN_STATE_HELP = {
+  pending:'排队等待执行', retry:'上一次没成，冷却后自动重试', running:'正在执行',
+  done:'已清理完成', failed:'多次失败，进人工队列',
+};
+async function openCleanup(){ document.querySelector('#cleandlg').showModal(); renderCleanup(); }
+async function renderCleanup(){
+  const body = $('#clean-body');
+  const d = await (await fetch('/api/cleanup')).json();
+  const tasks = d.tasks || [];
+  if(!tasks.length){
+    body.innerHTML = `<div class="empty">还没有清理任务。在场景 intent 的「清理」小节里写
+      yaml cleanup 机器块（三反引号包裹的 yaml），跑完判分后会自动登记到这里定时执行。</div>`;
+    return;
+  }
+  const now = Date.now();
+  body.innerHTML = `<table class="hist-t"><thead><tr>
+      <th>时间</th><th>跑批</th><th>脚本</th><th>状态</th><th>保持窗口</th><th>尝试</th><th></th></tr></thead><tbody>${
+    tasks.map(t => {
+      let hold = '-';
+      if(t.hold_until){
+        const left = new Date(t.hold_until) - now;
+        hold = left > 0 ? `保持中 · 剩 ${Math.floor(left/3600000)}h${Math.round(left%3600000/60000)}m`
+                        : '已到期，等调度';
+      }
+      const st = t.state || 'pending';
+      return `<tr>
+        <td class="mono" title="${esc(t.created_at||'')}">${esc((t.created_at||'').slice(5,16))}</td>
+        <td class="mono" title="${esc(t.run_id||'')}">${esc((t.run_id||'').slice(0,15))}</td>
+        <td class="mono">${esc(t.script||'')} <span class="hint">${esc((t.args_json||'[]'))}</span></td>
+        <td><span class="hint" title="${esc(t.last_error||CLEAN_STATE_HELP[st]||'')}">${esc(st)}</span></td>
+        <td class="mono">${esc(hold)}</td>
+        <td>${t.attempts ?? 0}</td>
+        <td>${st !== 'done' && st !== 'running'
+          ? `<button class="ghost" onclick="cleanupNow('${esc(t.id)}')">立即清理</button>` : ''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    <div class="hint" style="margin-top:10px">结论非 PASS 的清理任务默认保持 4 小时（QA_AGENT_CLEANUP_HOLD_HOURS 可调）——窗口内可以「重跑裁判」复核；点「立即清理」会跳过窗口马上执行。</div>`;
+}
+async function cleanupNow(taskId){
+  const ok = await uiConfirm({
+    title: '立即清理',
+    rows: ['<span class="k">注意</span>马上执行清理，证据会被清掉——之后无法再「重跑裁判」复核这条结论。'],
+    okText: '立即清理',
+  });
+  if(!ok) return;
+  const res = await fetch(`/api/cleanup/${encodeURIComponent(taskId)}/retry`, {method:'POST'});
+  if(!res.ok){ alert((await res.json()).detail || '触发失败'); return; }
+  renderCleanup();
 }
 
 // ---- 结论怎么读：卡片药丸的 title、上手面板共用一份 ----
@@ -1332,8 +1556,8 @@ async function submitAuthor(){
   const timer = setInterval(() => {
     if(mySeq !== authorSeq){ clearInterval(timer); return; }
     const s = Math.round((Date.now() - t0) / 1000);
-    $('#author-status').textContent =
-      `整理中… 已等 ${s}s（裁判标准机器会从你的描述里推，不用你写；关掉弹窗不影响生成）`;
+    const el = $('#author-elapsed');
+    if(el) el.textContent = `已等 ${s}s`;
   }, 1000);
   $('#author-log').innerHTML = '';
   try{
@@ -1366,10 +1590,34 @@ async function submitAuthor(){
     await load();   // 占位卡即刻上墙（服务端在提交瞬间已落占位 intent）
     const es = new EventSource(`/api/author/${encodeURIComponent(r0.author_id)}/events`);
     let done = false;
+    // 4 段进度：读样板 → 写要验什么 → 写怎么算过 → 检查两份（progress 事件实时驱动）
+    const prog = {sample:false, intent:false, expect:false};
+    const paintProgress = extra => {
+      const segs = [['sample','读样板学格式'],['intent','写「要验什么」'],['expect','写「怎么算过」'],['check','检查两份文件']];
+      const state = {sample: prog.sample, intent: prog.intent, expect: prog.expect, check: !!extra?.done};
+      const doing = segs.findIndex(([k]) => !state[k]);
+      $('#author-progress').innerHTML = segs.map(([k, label], i) => {
+        const st = state[k] ? 'done' : (i === doing ? 'doing' : '');
+        return `<span class="pseg ${st}">${label}</span>`;
+      }).join('<span class="parr">→</span>')
+        ;
+    };
+    paintProgress({});
     es.onmessage = async ev => {
       const {kind, payload} = JSON.parse(ev.data);
       if(kind === 'phase' && mySeq === authorSeq) $('#author-status').textContent = payload;
+      if(kind === 'progress' && mySeq === authorSeq){
+        if(payload.type === 'sample') prog.sample = true;
+        if(payload.type === 'file'){
+          if(String(payload.file).includes('intent')) prog.intent = true;
+          if(String(payload.file).includes('expect')) prog.expect = true;
+        }
+        paintProgress({});
+        return;
+      }
       if(kind !== 'done') return;
+      done = true; prog.done = true; es.close(); clearInterval(timer);
+      if(mySeq !== authorSeq) return;               // 用户已开始下一轮，别改写新表单
       done = true; es.close(); clearInterval(timer);
       if(mySeq !== authorSeq) return;               // 用户已开始下一轮，别改写新表单
       if(payload.status === 'error'){
@@ -1381,13 +1629,45 @@ async function submitAuthor(){
       // 只清「本次提交的那份」自动留存：用户若已开始写下一份，新内容不能被误删
       if(r.ok && wasNew && authorDraftCurrent()?.ask === submittedAsk) localStorage.removeItem('author-draft-current');
       const loadedName = draftLoadedId ? (loadNamedDrafts().find(d => d.id === draftLoadedId) || {}).name : null;
-      $('#author-status').textContent = r.ok ? '✓ 完成' + (loadedName ? `（草稿「${loadedName}」仍保留在草稿箱，方便下次调试）` : '')
-                                             : '没有产出，看下面';
+      $('#author-status').textContent = r.ok ? '✓ 完成' + (loadedName ? `（草稿「${loadedName}」仍保留在草稿箱）` : '') : '';
+      // 成果卡：两份文件的真实内容从磁盘读回（不信模型自述），PM 逐条确认
+      const scEnc = encodeURIComponent(r.scenario || '');
+      let intent = {}, expect = {steps: []};
+      try{
+        [intent, expect] = await Promise.all([
+          (await fetch(`/api/scenarios/${scEnc}/intent`)).json(),
+          (await fetch(`/api/scenarios/${scEnc}/expect`)).json(),
+        ]);
+      }catch(e){ /* 读不到就少渲染两块，不阻塞 */ }
+      const checks = (expect.steps || []).flatMap(s => (s.check || []).map((c, ci) => ({go: s.go, n: ci, c})));
+      const goal = (intent.sections && intent.sections.goal) || '';
+      const hw = (r.health || {});
+      const warn = [];
+      if(!hw.intent) warn.push('「要验什么」不完整，跑之前建议补一句');
+      if(!hw.expect) warn.push('「怎么算过」没有可执行的检查');
+      const checkItems = checks.slice(0, 5)
+        .map(x => `<li>${esc(x.c)}</li>`).join('') + (checks.length > 5 ? `<li>…另有 ${checks.length - 5} 条</li>` : '');
       $('#author-log').innerHTML = `
-        <div style="font-size:12.5px;margin-bottom:7px">${esc(r.summary || '')}</div>
-        ${(r.files||[]).map(f => `<div class="step"><span>✎</span>
-          <span class="t">写入</span><span class="a">${esc(f)}</span></div>`).join('')}
-        ${r.notes ? `<div class="hint" style="margin-top:8px">${esc(r.notes)}</div>` : ''}`;
+        <div style="border:1px dashed var(--line);border-radius:8px;padding:12px 14px;background:var(--bg)">
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">✓ 场景建好了：${esc(intent.title || r.scenario || '')}</div>
+          <div class="hint">已建在 scenarios/${esc(r.scenario || '')} · 用时 ${Math.round(r.elapsed_s || 0)}s${r.finished_via_finish === false ? ' · 机器没走完签字流程但文件都齐了' : ''}</div>
+          ${warn.length ? `<div class="hint" style="margin-top:6px;color:#b45309">⚠ ${warn.join('；')}</div>` : ''}
+          <h4 style="margin:10px 0 4px">要验什么</h4>
+          <div style="font-size:12.5px;white-space:pre-wrap">${esc(goal)}</div>
+          <h4 style="margin:10px 0 4px">怎么算过（${checks.length} 条）</h4>
+          <ul style="margin:0;padding-left:18px;font-size:12.5px">${checkItems || '<li>（无）</li>'}</ul>
+          <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">机器备注（summary / notes）</summary>
+            <div style="font-size:12px;white-space:pre-wrap">${esc(r.summary || '')}${r.notes ? '\n' + esc(r.notes) : ''}</div>
+          </details>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="primary sm" id="res-open">打开看两份</button>
+            <button class="primary sm" id="res-run">跑一下</button>
+            <button class="ghost sm" id="res-again">再建一个</button>
+          </div>
+        </div>`;
+      $('#res-open').onclick = () => { $('#author').close(); openPlaybook(r.scenario, authorSkill(), 'expect'); };
+      $('#res-run').onclick = () => { $('#author').close(); run(r.scenario, authorSkill()); };
+      $('#res-again').onclick = () => { $('#author-log').innerHTML = ''; $('#author-status').textContent = ''; };
       await load();
       $('#author-go').disabled = false;
     };
@@ -1522,6 +1802,130 @@ async function submitAnswers(){
   // 提交成功即关窗：续跑进度在卡片上实时可见（LIVE 画面 + 步骤），不需要守着这个弹窗
   $('#ask').close();
   attach(asking.name, r.events, '从回答的断点接着跑');
+}
+
+// ===== 判据质疑：裁判照判据判完后，认为考卷本身写错了，交给人裁决 =====
+// 红块=你写的（验不了，删改处划红线）→ 绿块=建议改成（新增处高亮绿）→ 折叠的取证证据。
+// 判据里的 context.xxx 一律代入本次实际值——人看到的是「balance_before = 6,892 积分」，
+// 不是变量名。ctx 来自该次跑批的 context.yaml（/api/runs 已带）。
+function lcsDiff(a, b){
+  /* 字符级 LCS diff：新旧判据往往只差几个字（页面名、措辞），整段摆一起人眼半天找不到。
+     返回 [{t:文本, s:same|del|add}]。判据行很短，O(n×m) 没压力；超长退化为前后缀。 */
+  a = String(a || ''); b = String(b || '');
+  if(a === b) return [{t: a, s: 'same'}];
+  if(a.length * b.length > 160000){
+    let p = 0; while(p < a.length && p < b.length && a[p] === b[p]) p++;
+    let ea = a.length, eb = b.length;
+    while(ea > p && eb > p && a[ea-1] === b[eb-1]){ ea--; eb--; }
+    return [{t: a.slice(0, p), s: 'same'}, {t: a.slice(p, ea), s: 'del'},
+            {t: b.slice(p, eb), s: 'add'}, {t: a.slice(ea), s: 'same'}]
+      .filter(s => s.t);
+  }
+  const n = a.length, m = b.length;
+  const dp = Array.from({length: n + 1}, () => new Uint16Array(m + 1));
+  for(let i = n - 1; i >= 0; i--)
+    for(let j = m - 1; j >= 0; j--)
+      dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const segs = [];
+  const push = (t, s) => { if(t) segs.push({t, s}); };
+  let i = 0, j = 0;
+  while(i < n && j < m){
+    if(a[i] === b[j]){ push(a[i], 'same'); i++; j++; }
+    else if(dp[i+1][j] >= dp[i][j+1]){ push(a[i], 'del'); i++; }
+    else { push(b[j], 'add'); j++; }
+  }
+  push(a.slice(i), 'del'); push(b.slice(j), 'add');
+  const out = [];
+  for(const s of segs){
+    const last = out[out.length - 1];
+    if(last && last.s === s.s) last.t += s.t; else out.push({...s});
+  }
+  return out;
+}
+
+function _diffHtml(current, proposed, ctx){
+  /* 新旧判据叠在同一段话里做行内 diff：删的划红线、增的绿底——
+     不分「你写的/建议的」两块摆，人顺着读一遍就知道改了哪几个字 */
+  return lcsDiff(current, proposed).map(s =>
+    s.s === 'del' ? `<del class="d">${substVars(s.t, ctx)}</del>`
+    : s.s === 'add' ? `<ins class="d">${substVars(s.t, ctx)}</ins>`
+    : substVars(s.t, ctx)).join('') || '<span class="hint">（空）</span>';
+}
+
+let crit = {rid:'', scen:'', issues:[], ctx:{}};
+
+function _critCard(it, i){
+  const ref = esc(it.check_ref || `${(it.step ?? 0) + 1}.${(it.check ?? 0) + 1}`);
+  return `<div class="crit-card">
+    <div class="crit-meta"><b>${ref}</b> · ${esc(it.problem || '判据可能写错了')}</div>
+    <div class="crit-diff" id="crit-diff-${i}">${_diffHtml(it.current, it.proposed, crit.ctx)}</div>
+    <div class="crit-tools"><button type="button" onclick="toggleCritEdit(${i})">微调这段建议</button></div>
+    <div class="crit-edit" id="crit-edit-${i}" hidden>
+      <textarea id="crit-${i}" spellcheck="false">${esc(it.proposed || '')}</textarea>
+    </div>
+    <details class="crit-obs"><summary>取证原文（点开核对）</summary>
+      <div class="crit-obs-body">${substVars(it.observed, crit.ctx)}</div>
+    </details>
+  </div>`;
+}
+
+function toggleCritEdit(i){
+  const box = $(`#crit-edit-${i}`), ta = $(`#crit-${i}`);
+  const opening = box.hidden;
+  box.hidden = !opening;
+  if(opening){
+    const it = crit.issues[i];
+    const upd = () => { $(`#crit-diff-${i}`).innerHTML = _diffHtml(it.current, ta.value, crit.ctx); };
+    ta.addEventListener('input', upd);
+    ta.focus();
+  }
+}
+
+async function openCriteria(rid){
+  const r = await (await fetch(`/api/runs/${rid}`)).json();
+  crit = {rid, scen: r.scenario || '', issues: r.criteria_issues || [],
+          ctx: (r.context && typeof r.context === 'object') ? r.context : {}};
+  const box = $('#criteria-body');
+  if(!crit.issues.length){
+    box.innerHTML = '<div class="empty">这条跑批没有待裁决的判据质疑。</div>';
+  } else {
+    box.innerHTML = `
+      <p class="crit-note">裁判修正后的判据（<del class="d">划线</del>=去掉 · <ins class="d">绿底</ins>=加上 · 变量已代入实际值）：</p>
+      ${crit.issues.map((it, i) => _critCard(it, i)).join('')}
+      <div class="crit-footer">
+        <span class="hint" id="crit-status"></span>
+        <span style="flex:1"></span>
+        <button class="ghost" onclick="submitCriteria('keep')">维持原判（${esc(r.pending_verdict || 'FAIL')}）</button>
+        <button title="采纳会改写场景的验收路线（有存档可回滚），并自动用新判据重跑裁判——只重判、不扣积分"
+          onclick="submitCriteria('apply')">采纳修订并重判</button>
+      </div>`;
+  }
+  document.querySelector('#criteria').showModal();
+}
+
+async function submitCriteria(action){
+  const items = [...Array((currentRun?.criteria_issues || []).length || document.querySelectorAll('#criteria-body textarea').length)]
+    .map((_, i) => {
+      const ta = $(`#crit-${i}`);
+      return ta ? {step: null, check: null, index: i, new_text: ta.value.trim()} : null;
+    }).filter(Boolean);
+  $('#crit-status').textContent = '提交中…';
+  // 后端按 issue 顺序对齐：index 位置带过去的 new_text 逐条映射到 criteria_issues
+  const body = {action, items: items.map((it, i) => ({index: i, new_text: it.new_text}))};
+  let r;
+  try{
+    const res = await fetch(`/api/runs/${encodeURIComponent(crit.rid)}/criteria-decision`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    r = await res.json().catch(() => ({}));
+    if(!res.ok){ $('#crit-status').textContent = r.detail || '提交失败'; return; }
+  }catch(e){ $('#crit-status').textContent = '提交失败：' + e.message; return; }
+  document.querySelector('#criteria').close();
+  if(action === 'apply' && r.run_id){
+    // 判据已改、重判已自动开跑：卡片直接进 LIVE，出结论自动弹新详情
+    attach(crit.scen, r.run_id, '用修订后的判据重判中…', () => detail(r.run_id));
+  } else {
+    load();
+  }
 }
 
 // ===== 验收路线结构化编辑器 =====
@@ -1823,37 +2227,83 @@ function renderTraceStep(s){
   </details>`;
 }
 
-function renderJudgment(j){
+const JG_WORD = {fail: '不成立', blocked: '没验到', pass: '成立'};
+const JG_FOLD_EVI = 56;   // 约等于 730px 宽 × 12.5px 中文一行
+const JG_FOLD_HOW = 48;   // 导航行要让出徽标 + 标签的宽度
+const jgCls = r => (r === 'pass' || r === 'fail' || r === 'blocked') ? r : 'unknown';
+
+// summary 就是截断后的原文；展开 = 全文 + body（备注）
+function jgFold(lead, html, body, open, more){
+  return `<details class="jg-fold"${open ? ' open' : ''}><summary><span class="jg-row">${lead}`
+    + `<span class="jg-clip">${html}</span>${more ? `<span class="jg-more">${more}</span>` : ''}`
+    + `</span></summary>${body ? `<div class="jg-fold-body">${body}</div>` : ''}</details>`;
+}
+
+function renderJudgment(j, ctx = {}){
   if(!j || !j.steps || !j.steps.length) return '<div class="empty">这次没有判定结果</div>';
-  const legend = `<div class="jg-legend">
-    <span><i style="background:var(--line)"></i>灰底＝验收路线<b style="margin-left:3px">规定</b>的（expect.yaml 原文）</span>
-    <span><i style="background:color-mix(in srgb,var(--accent) 35%,transparent)"></i>浅色＝这次裁判<b style="margin-left:3px">实测</b>的</span>
-  </div>`;
-  const lbl = t => `<span class="lbl">${t}</span>`;
-  return `<div class="jg">${legend}
-    ${j.steps.map((s, i) => `
-      <div class="jg-step">
-        <header><span class="jg-no">${i+1}</span>
-          <span>${lbl('规定 · go')}${inline(s.go||'')}</span></header>
-        <div class="jg-body">
-          <div class="jg-ran">
-            <span class="k">reached</span>
-            <span>${s.reached === false ? '<span class="res fail">没到</span>' : '<span class="res pass">到了</span>'}</span>
-            ${s.how ? `<span class="k">how</span><span>${inline(s.how)}</span>` : ''}
-          </div>
-          ${(s.check||[]).map(c => `
-            <div class="jg-check">
-              <div class="jg-spec">${lbl('规定要核实的事 · fact')}${inline(c.fact||'')}</div>
-              <div class="jg-got">
-                <div><span class="res ${c.result}">${MARK[c.result]||'?'} ${c.result}</span></div>
-                ${c.evidence ? `<div>${lbl('裁判实际读到的原文 · evidence')}
-                  <div class="jg-evi">${esc(String(c.evidence).trim())}</div></div>` : ''}
-                ${c.note ? `<div class="jg-note">note：${inline(c.note)}</div>` : ''}
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>`).join('')}
-  </div>`;
+  /* deep-planner 设计规格：颜色给例外，文字按需折叠。
+     扫视四层：顶部分段色带 → 步骤编号实心圆+色点 → 判据左侧实色条+实心图标 → 例外行浅底+标签。
+     所有判据/判定文本先过 substVars：context.xxx 代入该次实际值（共享组件，与仲裁弹窗同源）。 */
+  const steps = j.steps.map(s => {
+    const checks = s.check || [];
+    const n = {pass: 0, fail: 0, blocked: 0};
+    checks.forEach(c => { if(c.result in n) n[c.result]++; });
+    const worst = s.reached === false ? 'blocked'
+      : n.fail ? 'fail' : n.blocked ? 'blocked' : checks.length ? 'pass' : 'unknown';
+    return {s, checks, n, worst};
+  });
+  const tot = {pass: 0, fail: 0, blocked: 0}; let all = 0, miss = 0;
+  steps.forEach(x => { all += x.checks.length; if(x.s.reached === false) miss++;
+                       ['pass','fail','blocked'].forEach(k => tot[k] += x.n[k]); });
+
+  const top = all ? `<div class="jg-top">
+      <div class="jg-bar">${steps.filter(x => x.checks.length).map(x =>
+        `<span style="--n:${x.checks.length}">${x.checks.map(c =>
+          `<i class="${jgCls(c.result)}"></i>`).join('')}</span>`).join('')}</div>
+      <div class="jg-tally">共 ${all} 条${['fail','blocked','pass'].filter(k => tot[k]).map(k =>
+        ` · <span class="${k}"><b>${tot[k]}</b>${JG_WORD[k]}</span>`).join('')}${miss
+        ? ` · <span class="miss">${miss} 步没走到</span>` : ''}</div>
+    </div>` : '';
+
+  return `<div class="jg">${top}${steps.map(({s, checks, n, worst}, i) => {
+    const sum = !checks.length ? ''
+      : (!n.fail && !n.blocked) ? '全部成立'
+      : [n.fail ? `${n.fail} 不成立` : '', n.blocked ? `${n.blocked} 没验到` : ''].filter(Boolean).join(' · ');
+    const how = String(s.how || '').trim();
+    const reach = s.reached === true ? '<span class="jg-reach ok">✓ 已走到</span>'
+                : s.reached === false ? '<span class="jg-reach no">! 没走到</span>' : '';
+    const howHtml = !how ? ''
+      : how.length <= JG_FOLD_HOW
+        ? `<span class="jg-lbl">怎么走的</span><span class="jg-plain">${substVars(how, ctx)}</span>`
+        : jgFold('<span class="jg-lbl">怎么走的</span>', substVars(how, ctx), '', s.reached === false);
+    return `<div class="jg-step">
+      <header class="jg-head">
+        <span class="jg-no ${worst}">${i + 1}</span>
+        <span class="jg-go${s.go ? '' : ' empty'}">${s.go ? substVars(s.go, ctx) : `步骤 ${i + 1}`}</span>
+        ${checks.length ? `<span class="jg-dots">${checks.map(c => `<i class="${jgCls(c.result)}"></i>`).join('')}</span>` : ''}
+        ${sum ? `<span class="jg-sum ${worst}">${sum}</span>` : ''}
+      </header>
+      ${reach || howHtml ? `<div class="jg-nav">${reach}${howHtml}</div>` : ''}
+      ${checks.length ? `<div class="jg-checks">${checks.map(c => {
+        const r = jgCls(c.result);
+        const evi = String(c.evidence || '').trim(), note = String(c.note || '').trim();
+        const noteHtml = note ? `<span class="jg-k">备注</span>${substVars(note, ctx)}` : '';
+        let eviHtml = '';
+        if(evi && r === 'pass' && !note && evi.length <= JG_FOLD_EVI)
+          eviHtml = `<div class="jg-evi jg-plain">${substVars(evi, ctx)}</div>`;
+        else if(evi)
+          eviHtml = `<div class="jg-evi">${jgFold('', substVars(evi, ctx), noteHtml, r !== 'pass', note ? '+备注' : '')}</div>`;
+        else if(note)
+          eviHtml = `<div class="jg-evi jg-plain">${noteHtml}</div>`;
+        return `<div class="jg-check ${r}">
+          <span class="jg-ico">${MARK[c.result] || '?'}</span>
+          <div class="jg-fact">${substVars(c.fact || '', ctx)}</div>
+          ${r === 'fail' || r === 'blocked' ? `<span class="jg-tag">${JG_WORD[r]}</span>` : ''}
+          ${eviHtml}
+        </div>`;
+      }).join('')}</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
 }
 
 // 导出 HTML 里的 playbook.md：逐行保留排版（【锚点】【动作】这套标记本身就是结构），
@@ -1894,6 +2344,17 @@ function inline(t){
   x = x.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
         (_, txt, url) => `<a href="${url.replace(/"/g,'%22')}" target="_blank" rel="noopener">${txt}</a>`);
   return x.replace(/%%C(\d+)%%/g, (_, k) => codes[k]);
+}
+/* ---- 共享组件：判据变量芯片 ----
+   判据/判定文本里的 `context.xxx` 引用代入该次跑批的实际值，渲染成
+   「变量名 = 实际值」的小芯片。判定结果页（renderJudgment）和裁判仲裁弹窗
+   （openCriteria）共用这一个实现；ctx 来自该次跑批的 context.yaml。 ---- */
+function substVars(text, ctx){
+  return esc(String(text || '')).replace(/context\.([A-Za-z0-9_]+)/g, (m, k) => {
+    const v = ctx && ctx[k] != null && String(ctx[k]).trim() !== '' ? String(ctx[k]) : null;
+    return v ? `<span class="varchip" title="context.${k}">${esc(k)} = <b>${esc(v)}</b></span>`
+             : `<span class="varchip miss" title="本次跑批没留下这个值">${esc(m)}</span>`;
+  });
 }
 function mdTable(rows){
   const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim()));
@@ -2579,12 +3040,17 @@ function renderDiag(r){
   if(r.judge_incomplete)
     return `<div class="diag warn"><b>裁判没跑完</b><span>${esc(r.judge_incomplete)}
       —— 没交出 judgment，所以判分脚本只能报 BLOCK。这不是业务失败，是裁判自己没走到终点，
-      通常是轮数不够或它绕远了。</span></div>`;
+      通常是轮数不够或它绕远了。修好判据后点顶部「⚖ 重跑裁判」重新取证——不重跑执行、不再扣积分。</span></div>`;
   if(r.status === 'stopped')
     return `<div class="diag neutral"><b>被手动停止</b><span>不是失败——是人点了「停止」提前收的口，
       浏览器和录屏都正常关闭了，只是没跑完。</span></div>`;
-  if(r.status === 'needs_input')
+  if(r.status === 'needs_input'){
+    if((r.criteria_issues || []).length)
+      return `<div class="diag warn"><b>判据待裁决</b><span>裁判按当前判据照实判了（该 blocked 的已 blocked），
+        但它发现这几条判据本身可能写错了。采纳修订后自动重判，或维持原判（${esc(r.pending_verdict || '')}）。
+        <button class="ghost sm" style="margin-left:8px" onclick="openCriteria('${esc(r.run_id)}')">去裁决</button></span></div>`;
     return `<div class="diag warn"><b>等人回答</b><span>探索卡住了，回答后可以接着跑。</span></div>`;
+  }
   if(r.status === 'blocked')
     return `<div class="diag warn"><b>环境阻塞</b><span>不是业务失败，是跑不下去。</span></div>`;
   if(r.status === 'failed')
@@ -2592,6 +3058,61 @@ function renderDiag(r){
   if(r.status === 'passed')
     return `<div class="diag ok"><b>通过</b><span>裁判逐条取证，全部成立。</span></div>`;
   return '';
+}
+
+// ---- 仅重判：对已有跑批只重跑裁判（不重跑执行、不再扣积分） ----
+// 入口有两处，干的是同一件事：卡片动作区（PM 主动线）+ 详情弹窗头部。
+// 应用内确认弹窗（替代浏览器原生 confirm）：rows 是 HTML 片段，支持配色强调。
+function uiConfirm({title, rows = [], okText = '确定', cancelText = '取消'}){
+  return new Promise(resolve => {
+    const dlg = document.querySelector('#cfm');
+    $('#cfm-title').textContent = title;
+    $('#cfm-body').innerHTML = rows.map(r => `<div class="cfm-row">${r}</div>`).join('');
+    const done = v => { dlg.close(); resolve(v); };
+    $('#cfm-ok').textContent = okText;
+    $('#cfm-ok').onclick = () => done(true);
+    $('#cfm-cancel').textContent = cancelText;
+    $('#cfm-cancel').onclick = () => done(false);
+    dlg.oncancel = () => resolve(false);   // Esc 关闭按取消算
+    dlg.showModal();
+  });
+}
+
+async function _startRejudge(name, rid){
+  const ok = await uiConfirm({
+    title: '⚖ 只重跑裁判',
+    rows: [
+      '<span class="k">复用</span>原跑批的登录态和事实，按<b>当前</b>验收路线重新取证判分',
+      '<span class="k">省钱</span>不重跑执行、不再扣积分——模型成本约 $1，全量重跑要 90~180 积分',
+      '<span class="k">安全</span>原记录原封不动，新结论作为一条新记录挂在同一张卡上',
+    ],
+    okText: '开始重判',
+  });
+  if(!ok) return null;
+  const res = await fetch(`/api/runs/${encodeURIComponent(rid)}/rejudge`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({headless: true}),
+  });
+  const d = await res.json().catch(() => ({}));
+  if(!res.ok){ alert(d.detail || '重判发起失败'); return null; }
+  return d;
+}
+
+async function rejudgeFromCard(name, rid){
+  if(running[name]){ alert('这个场景正有跑批在跑，等它出结论再重判'); return; }
+  const d = await _startRejudge(name, rid);
+  if(!d) return;
+  // 卡片直接进入 LIVE 重判状态；出结论自动打开新详情——不用再去找「看结论」
+  attach(name, d.run_id, '重判中…', () => detail(d.run_id));
+}
+
+async function rejudgeCurrent(){
+  const r = currentRun;
+  if(!r) return;
+  const d = await _startRejudge(r.scenario, r.run_id);
+  if(!d) return;
+  dlg.close();
+  attach(r.scenario, d.run_id, '重判中…', () => detail(d.run_id));
 }
 
 function tab(name){
@@ -2612,6 +3133,14 @@ async function detail(rid){
   // 事后翻记录时看不到跑的是哪个环境，这条记录就没法用。
   $('#dlg-pill').innerHTML = `${r.env ? `<span class="chip env">${esc(r.env)}</span>` : ''}`
     + `<span class="pill ${r.status}">${r.verdict||r.status}</span>`;
+  // 头部的重跑裁判：一个常驻入口，可用性以服务端 preflight 为准，不可用就藏起来（原因在 title）
+  const rjBtn = $('#dlg-rj');
+  if(rjBtn){
+    const v = String(r.verdict || r.status || '');
+    const rj = r.rejudge || {allowed: false};
+    rjBtn.hidden = !(rj.allowed && r.status !== 'running' && !['PASS','EXPLORED','ASK'].includes(v));
+    rjBtn.title = rj.allowed ? '只重新取证判分，不重跑执行、不再扣积分' : (rj.reason || '');
+  }
   const run = r.steps || [], jud = r.judge_steps || [];
 
   $('#dlg-body').innerHTML = `
@@ -2626,9 +3155,22 @@ async function detail(rid){
       ${r.external ? `<div class="diag neutral"><b>外部记录</b><span>${esc(r.source || '')}
         —— 迁移自 roadbook/runs/（Claude Code 时代的产物）：只有结论、裁判证据和事实基线，
         没有执行轨迹和录屏。原始目录仍在原处。</span></div>` : ''}
+      ${r.rejudge_of ? `<div class="diag neutral"><b>仅重判</b><span>这是对
+        <a href="#" onclick="detail('${esc(r.rejudge_of)}');return false"><code>${esc(r.rejudge_of)}</code></a>
+        的仅重判——复用原跑批的执行现场和登录态，只重新取证判分；执行轨迹继承自原跑批。</span></div>` : ''}
+      ${(r.rejudge || {}).allowed && !['PASS','EXPLORED','ASK'].includes(String(r.verdict || r.status || ''))
+        ? `<div class="hint" style="margin:6px 0 2px">判据改对了想复核？点顶部「⚖ 重跑裁判」：复用本次登录态和事实，只重新取证判分，不重跑执行、不再扣积分。
+           ${(r.rejudge.warnings || []).length ? `<div class="stale" style="margin-top:4px">${r.rejudge.warnings.map(w => '⚠ ' + esc(w)).join('<br>')}</div>` : ''}</div>` : ''}
+      ${(r.rejudges || []).length ? `<h4>已重判 ${r.rejudges.length} 次</h4>
+        <table class="hist-t"><tbody>${r.rejudges.map(j => `
+          <tr class="hrow" onclick="detail('${esc(j.run_id)}')">
+            <td class="mono">${esc(j.run_id.split('+rejudge')[1] || '')}</td>
+            <td>${esc(j.started_at || '')}</td>
+            <td><span class="pill ${esc(j.verdict || j.status)}">${esc(j.verdict || j.status)}</span></td>
+            <td class="go">看 →</td></tr>`).join('')}</tbody></table>` : ''}
       <h4>结论</h4><div style="font-size:13px">${esc(r.summary||'')}</div>
       ${r.notes?`<h4>备注</h4><pre>${esc(r.notes)}</pre>`:''}
-      <h4>用量</h4>${renderUsage(r.llm_calls)}
+      <h4>用量${r.rejudge_of ? '（仅裁判成本）' : ''}</h4>${renderUsage(r.llm_calls)}
       ${r.external ? '' : `<h4>执行录屏</h4><video controls style="width:100%;border-radius:5px;background:#000"
         src="/api/runs/${rid}/video?which=runner"></video>`}
       ${jud.length?`<h4>裁判录屏</h4><video controls
@@ -2642,7 +3184,7 @@ async function detail(rid){
     </div>
 
     <div class="pane" data-pane="judge" hidden>
-      <h4>判定结果</h4>${renderJudgment(r.judgment)}
+      <h4>判定结果</h4>${renderJudgment(r.judgment, r.context)}
       <h4>裁判照的规矩</h4>
       <div class="task"><details><summary style="cursor:pointer;font-size:12px;color:var(--muted)">
         judge-protocol.md　取证协议（点开看全文）</summary>
@@ -2703,7 +3245,7 @@ function exportRunHtml(){
 
   <h2>执行轨迹（${run.length} 步）</h2>${renderTrace(run, r.llm_calls, false)}
 
-  <h2>判定结果</h2>${renderJudgment(r.judgment)}
+  <h2>判定结果</h2>${renderJudgment(r.judgment, r.context)}
   ${jud.length?`<h2>裁判取证过程（${jud.length} 步）</h2>${renderTrace(jud, r.llm_calls, true)}`:''}
   ${r.judge_output?`<h2>判分脚本输出</h2><pre>${esc(r.judge_output)}</pre>`:''}
 
@@ -2730,8 +3272,11 @@ function exportRunHtml(){
 load();
 loadToolKinds();
 loadIntentSpec();
-// 后台刷新撞上服务重启会 fetch 失败——那是瞬时的，吞掉别往控制台甩未处理异常
-setInterval(() => { if(!Object.keys(running).length) load().catch(() => {}); }, 8000);
+// 后台刷新无条件跑（8 秒一次）。以前这里有个「有跑批在跑就跳过」的判断，本意是保护
+// LIVE 画面不被重绘打断，副作用是只要有一张卡在跑，整块看板的状态刷新就全部冻结——
+// 别的卡出结论、裁决生效、SSE 断线，全都看不见，只能手动刷新（2026-10-29 实测踩坑）。
+// 现在的重绘会把在跑卡片的 LIVE <img> 原样搬回新卡（见 render），流不会断。
+setInterval(() => { load().catch(() => {}); }, 8000);
 </script>
 </body>
 </html>

@@ -22,7 +22,7 @@ from tools import BROWSER_TOOLS, REGISTRY, Tool
 from tools.base import legal_scenario_name
 
 from . import recorder
-from .app import QaAgent
+from .app import QaAgent, RejudgeRefused
 from .cancel import CancelRegistry
 from .concurrency import RunGate
 from .context_vars import describe as describe_context
@@ -39,7 +39,7 @@ from .public_config import (
     suggest_key,
     validate_entry,
 )
-from .session import JUDGE_PROTOCOL, new_run_id, resume_run_id
+from .session import JUDGE_PROTOCOL, new_run_id, resume_run_id, rejudge_run_id
 from .skills import Skill
 from .traces import Run
 
@@ -48,12 +48,33 @@ stream = EventStream()
 cancels = CancelRegistry()
 core = QaAgent(frames=frames)
 gate = RunGate(core.settings.max_concurrent_runs)   # 同时最多几个跑批在跑，见 concurrency.py
+
+# 垃圾回收点调度：每分钟扫一次清理台账，到期就执行（冷却期任务自动延后重试）。
+# 直接用 core 那份实例——register（跑批钩子）和执行（调度线程）必须看到同一个台账。
+cleanup_manager = core.cleanup
+
+
+def _cleanup_scheduler() -> None:
+    while True:
+        time.sleep(60)
+        try:
+            done = cleanup_manager.run_due()
+            if done:
+                print(f"[cleanup] 本轮执行 {done} 个清理任务")
+        except Exception as e:
+            print(f"[cleanup] 调度异常: {type(e).__name__}: {e}")
+
+
+threading.Thread(target=_cleanup_scheduler, daemon=True, name="cleanup-scheduler").start()
 app = FastAPI(title="Roadbook Runner")
 
 # 跑批是进程内的线程，服务一重启就全没了——所以此刻还标着 running 的记录一定是上次没收尾的。
 # 不收掉的话，看板上那张卡会永远显示"跑着"，实时画面却永远不来。
 if _orphans := core.sweep_orphans():
     print(f"[启动清扫] {len(_orphans)} 条没收尾的跑批记录已标为 error: {', '.join(_orphans)}")
+# 同理：执行到一半进程死掉的清理任务回 retry，不能永远卡在 running
+if _stuck := core.store.reset_running_cleanup():
+    print(f"[启动清扫] {_stuck} 个执行中被中断的清理任务已回 retry")
 # 原子候选的过期是读的时候现算的，这里只是顺手把早就「删了」的行从文件里清掉
 if _expired := core.atoms.sweep():
     print(f"[启动清扫] {_expired} 条过期的原子候选已清掉")
@@ -102,6 +123,11 @@ class IntentRequest(BaseModel):
 
 class AnswerRequest(BaseModel):
     answers: list[str]
+    skill: str | None = None
+    headless: bool = True
+
+
+class RejudgeRequest(BaseModel):
     skill: str | None = None
     headless: bool = True
 
@@ -193,6 +219,31 @@ def _latest_for(scenario_name: str, latest: dict[str, Run]) -> Run | None:
     return max(cands, key=lambda r: r.run_id) if cands else None
 
 
+def _rejudge_target(scenario_name: str, latest: Run | None) -> dict[str, Any] | None:
+    """这个场景最近一条**可重判**的跑批（最多往前找 6 条）。
+
+    卡片上的「重跑裁判」按钮指向它——最新一条未必可判（比如刚被停止的全量跑，
+    没留下现场），但再往前那条 BLOCK 的现场还在。PM 只关心「这条路最后没验过，
+    我想复核」，回溯是服务端的事，不该让 PM 翻历史列表。
+
+    最新结论已经是 PASS/EXPLORED 的场景直接不给：没有要复核的东西，翻出历史
+    BLOCK 给按钮只会制造困惑。"""
+    if latest is not None and str(latest.verdict) in ("PASS", "EXPLORED"):
+        return None
+    for row in core.scenario_runs(scenario_name, 6):
+        verdict = (row.get("verdict") or row.get("status") or "").strip()
+        if verdict in ("", "PASS", "EXPLORED", "ASK", "running"):
+            continue   # 没有需要复核的结论，或者还挂着
+        try:
+            _src, _d, _sk, _sc, warnings = core.rejudge_preflight(row["run_id"])
+        except RejudgeRefused:
+            continue
+        except Exception:
+            continue   # 列表接口不许被单条脏数据炸掉
+        return {"run_id": row["run_id"], "verdict": verdict, "warnings": warnings}
+    return None
+
+
 @app.get("/api/skills")
 def api_skills() -> list[dict[str, Any]]:
     latest = core.latest_by_scenario()
@@ -204,9 +255,11 @@ def api_skills() -> list[dict[str, Any]]:
             scenarios.append({
                 **sc.to_dict(),
                 "last": ({"run_id": last.run_id, "status": str(last.status), "verdict": str(last.verdict),
-                          "finished_at": last.finished_at or last.started_at}
+                          "finished_at": last.finished_at or last.started_at,
+                          "criteria_pending": bool(last.criteria_issues)}
                          if last else None),
                 "trend": core.knowledge.trend(sc.name, 5),
+                "rejudge": _rejudge_target(sc.name, last),
             })
         out.append({"name": skill.name, "description": skill.description,
                     "resources": len(skill.resources()), "scenarios": scenarios,
@@ -322,23 +375,22 @@ def api_author(req: AuthorRequest) -> dict[str, Any]:
         AUTHOR_TASKS[aid] = entry
 
     def work():
-        try:
-            result = core.author(sk, req.ask, scenario=req.scenario, url=req.url,
+        # 进度实时透传成 progress 事件（前端 4 段进度条的数据源；done 前的另一事件类型，旧前端向后兼容）
+        result = core.author(sk, req.ask, scenario=req.scenario, url=req.url,
                              name=req.name, project=req.project,
-                             config_hints=config_hints or None)
-        except Exception as e:
-            if stub_dir is not None and stub_dir.exists() and not (stub_dir / "expect.yaml").exists():
-                shutil.rmtree(stub_dir, ignore_errors=True)   # 生成失败：占位一并撤掉，列表不留空壳
-            with AUTHOR_TASKS_LOCK:
-                entry.update(status="error", ok=False, summary=f"{type(e).__name__}: {e}")
-            print(f"[author] {aid} 失败：{type(e).__name__}: {e}")
-            raise
+                             config_hints=config_hints or None,
+                             on_progress=lambda p: stream.emit(aid, "progress", p))
+        if result.status == "failed" and stub_dir is not None and stub_dir.exists():
+            shutil.rmtree(stub_dir, ignore_errors=True)   # 两份文件都不合格：占位一并撤掉，列表不留空壳
         with AUTHOR_TASKS_LOCK:
             entry.update(status="done", ok=result.ok, scenario=result.scenario,
                          summary=(result.summary or "")[:100])
-        print(f"[author] {aid} 完成：scenario={result.scenario} ok={result.ok} 文件 {len(result.files)} 个")
+        print(f"[author] {aid} 完成：scenario={result.scenario} ok={result.ok} "
+              f"status={result.status} 文件 {len(result.files)} 个")
         stream.emit(aid, "done", {"status": "done", "result": {
-            "ok": result.ok, "scenario": result.scenario,
+            "ok": result.ok, "scenario": result.scenario, "status": result.status,
+            "health": result.health, "finished_via_finish": result.finished_via_finish,
+            "elapsed_s": result.elapsed_s,
             "summary": result.summary, "notes": result.notes, "files": result.files}})
 
     _spawn(aid, work, "整理中：读现有场景学格式、生成三件套…")
@@ -613,6 +665,69 @@ def api_answer(rid: str, req: AnswerRequest) -> dict[str, Any]:
     return {"ok": True, "events": run_id, "run_id": run_id}
 
 
+# 仅重判的防重入台账：root → 正在跑的重判 run_id。判活靠 cancels 里还有没有这个 run_id
+# （_spawn 在所有退出路径的 finally 都会 drop，包括排队中被停止的）。
+REJUDGING: dict[str, str] = {}
+REJUDGING_LOCK = threading.Lock()
+
+
+def _start_rejudge(rid: str, headless: bool = True) -> dict[str, Any]:
+    """重判的公共入口：preflight → prod 围栏 → 防重入 → 续租 → 后台启动。
+    手动「⚖ 重跑裁判」和「采纳判据修订后自动重判」都走这一条路。"""
+    try:
+        src, _root_dir, sk, _scenario, warnings = core.rejudge_preflight(rid)
+    except RejudgeRefused as e:
+        raise HTTPException(e.status, e.message) from e
+    root = src.rejudge_of or src.run_id
+    _prod_fence(src.env)     # 重判沿用原跑批的环境，prod 的一样要过围栏
+    with REJUDGING_LOCK:
+        active = REJUDGING.get(root)
+        if active and cancels.get(active) is not None:
+            raise HTTPException(409, f"这个跑批已有一次重判在跑：{active}")
+        run_id = rejudge_run_id(root)
+        if core.run_dir(run_id).exists():
+            raise HTTPException(409, "同一秒内重复提交了重判，稍后再试")
+        cancel = cancels.create(run_id)
+        REJUDGING[root] = run_id
+    # 续租：重判期间保持窗口不会到期，清理不会把证据掀了
+    core.cleanup.hold(root)
+    _spawn(run_id, lambda: core.rejudge(sk, rid, run_id=run_id, headless=headless,
+                                        emit=_emitter(run_id), cancel=cancel),
+           "起独立裁判（仅重判）")
+    return {"ok": True, "run_id": run_id, "rejudge_of": root, "events": run_id, "warnings": warnings}
+
+
+@app.post("/api/runs/{rid}/rejudge")
+def api_rejudge(rid: str, req: RejudgeRequest) -> dict[str, Any]:
+    """仅重跑裁判：不重跑 runner（不再扣积分、不再建研究），复用原跑批的登录态和事实，
+    按当前 expect.yaml 重新取证判分。判据写错、裁判卡死时的补救通道。"""
+    _skill(req.skill)   # 技能名报错要冒出来，场景归属以原跑批记录为准
+    return _start_rejudge(rid, req.headless)
+
+
+class CriteriaDecisionRequest(BaseModel):
+    """裁判质疑判据后人的裁决：apply=采纳修订（可逐条改文本）并自动重判；keep=维持原判。"""
+
+    action: str                      # apply | keep
+    skill: str | None = None
+    items: list[dict[str, Any]] = []   # apply 时可带 {step, check, new_text}；缺省用裁判的建议原文
+
+
+@app.post("/api/runs/{rid}/criteria-decision")
+def api_criteria_decision(rid: str, req: CriteriaDecisionRequest) -> dict[str, Any]:
+    try:
+        core.decide_criteria(rid, req.action, req.items or None)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+    if req.action == "apply":
+        # 判据已落盘：立即用新判据重判（复用同一条防重入/续租链路），出真结论
+        result = _start_rejudge(rid, headless=True)
+        return {**result, "decided": "apply"}
+    return {"ok": True, "decided": "keep"}
+
+
 @app.post("/api/runs/{rid}/stop")
 def api_stop(rid: str) -> dict[str, Any]:
     """叫停一个在跑的跑批。不是杀进程——只是把信号置位，工作线程自己在下一个安全点收口，
@@ -645,7 +760,28 @@ def api_run(rid: str) -> dict[str, Any]:
         data["expect"] = load_expect(core.skill(record.skill or None).scenario(record.scenario))
     except FileNotFoundError:
         data["expect"] = None
+    # 仅重判相关的视图数据：root 侧给「已重判 N 次」列表和按钮可用性；重判侧给 root 链接
+    root = record.rejudge_of or rid
+    data["rejudges"] = core.store.rejudges_of(root) if not record.rejudge_of else []
+    try:
+        _src, _d, _sk, _sc, warns = core.rejudge_preflight(rid)
+        data["rejudge"] = {"allowed": True, "reason": "", "warnings": warns}
+    except RejudgeRefused as e:
+        data["rejudge"] = {"allowed": False, "reason": e.message, "warnings": []}
+    data["cleanup"] = core.store.cleanup_tasks_for_run(root)
     return data
+
+
+@app.get("/api/cleanup")
+def api_cleanup() -> dict[str, Any]:
+    """清理任务台账：看板「待清理」队列的数据源。"""
+    return {"tasks": cleanup_manager.all_tasks(100)}
+
+
+@app.post("/api/cleanup/{task_id}/retry")
+def api_cleanup_retry(task_id: str) -> dict[str, Any]:
+    cleanup_manager.requeue(task_id)
+    return {"ok": True}
 
 
 # ---- 实时 ---------------------------------------------------------------------
@@ -688,6 +824,9 @@ def api_live(rid: str) -> StreamingResponse:
 @app.get("/api/runs/{rid}/video")
 def api_video(rid: str, which: str = "runner") -> FileResponse:
     path = recorder.video_of(core.run_dir(rid), which)
+    if not path and which == "runner" and (record := core.record(rid)) and record.rejudge_of:
+        # 重判没有自己的 runner 阶段：执行录屏回退到原跑批，详情页不会开天窗
+        path = recorder.video_of(core.run_dir(record.rejudge_of), which)
     if not path:
         raise HTTPException(404, "没有录屏")
     return FileResponse(path, media_type="video/webm")
@@ -696,6 +835,8 @@ def api_video(rid: str, which: str = "runner") -> FileResponse:
 @app.get("/api/runs/{rid}/poster")
 def api_poster(rid: str, which: str = "runner") -> FileResponse:
     path = recorder.poster_of(core.run_dir(rid), which)
+    if not path and which == "runner" and (record := core.record(rid)) and record.rejudge_of:
+        path = recorder.poster_of(core.run_dir(record.rejudge_of), which)
     if not path:
         raise HTTPException(404, "没有截图")
     return FileResponse(path, media_type="image/png")

@@ -28,6 +28,7 @@ class SubAgent:
     # 写在这里而不是只放全局：runner 要等页面、裁判只读，两者的节奏本来就不一样。
     stall_nudge_after: int = 0
     stall_abort_after: int = 0
+    stall_landing: bool = False       # 停滞后进收口轮（只给 finish），裁判用；runner 不用
     max_wall_seconds: int = 0
     max_total_tokens: int = 0
     keep_recent_turns: int = 2
@@ -62,6 +63,7 @@ class SubAgentLoader:
             model=meta.get("model"),
             stall_nudge_after=limit("stall_nudge_after", s.stall_nudge_after),
             stall_abort_after=limit("stall_abort_after", s.stall_abort_after),
+            stall_landing=bool(meta.get("stall_landing", s.stall_landing)),
             max_wall_seconds=limit("max_wall_seconds", s.max_wall_seconds),
             max_total_tokens=limit("max_total_tokens", s.max_total_tokens),
             keep_recent_turns=limit("keep_recent_turns", s.keep_recent_turns),

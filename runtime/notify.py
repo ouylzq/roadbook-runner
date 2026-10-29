@@ -26,7 +26,8 @@ def notify_finished(settings: Settings, record: Run) -> None:
             duration = f"，耗时 {int(delta // 60)} 分 {int(delta % 60)} 秒" if delta > 0 else ""
         except ValueError:
             pass
-    text = (f"Roadbook 跑批结束：{record.scenario}"
+    tag = f"（仅重判，原跑批 {record.rejudge_of}）" if record.rejudge_of else ""
+    text = (f"Roadbook 跑批结束：{record.scenario}{tag}"
             f"（{record.env or '默认环境'}）→ {outcome}{duration}\n"
             f"结论详情：http://127.0.0.1:8900 （看板 · {record.run_id}）")
     body = json.dumps({"msg_type": "text", "content": {"text": text}}).encode("utf-8")

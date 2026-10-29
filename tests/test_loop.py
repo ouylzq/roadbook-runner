@@ -349,6 +349,44 @@ def test_stall_counter_resets_when_the_page_actually_moves(skill):
     assert result.outcome is Outcome.DONE   # 中途变过，连续计数没攒够 3
 
 
+class WatchingLLM(ScriptedLLM):
+    """顺带记下每次调用拿到的工具表——收口轮「只给 finish」锁的就是它。"""
+
+    def __init__(self, *replies):
+        super().__init__(*replies)
+        self.tools_seen: list[list] = []
+
+    def chat(self, messages, tools, *, on_call=None):
+        self.tools_seen.append(tools)
+        return super().chat(messages, tools, on_call=on_call)
+
+
+def test_stall_landing_restricts_tools_to_finish_only(skill):
+    """2026-10-28 生产实测：LANDING_NUDGE 嘴上说「只给你 finish 一个工具」，
+    chat 却仍传全量工具表，裁判照旧连发 eval_js，又攒满停滞被 abort，7 条检查全 blocked。
+    收口必须收在工具表上，不能只靠提示词。"""
+    agent = SubAgent(name="j", description="", prompt="P", tools=("observe", "wait", "eval_js"),
+                     max_iterations=12, stall_nudge_after=2, stall_abort_after=3, stall_landing=True)
+    llm = WatchingLLM(
+        *[reply(call("eval_js", f"c{i}", expr="1")) for i in range(4)],   # 四轮停滞 → 进收口轮
+        reply(call("eval_js", "c9", expr="还在扒")),                       # 收口轮还不死心
+        reply(call("finish", "c10", outcome="done", summary="交卷")),
+    )
+    loop = AgentLoop(agent, llm, fingerprint=lambda: "页面纹丝不动")
+    result = loop.run(ToolContext(skill=skill), "S", "T")
+
+    assert result.outcome is Outcome.DONE and result.summary == "交卷"
+    # 进收口轮之后，chat 只拿到 finish 一个 schema（第 1~4 次仍是全量）
+    assert {t["function"]["name"] for t in llm.tools_seen[0]} == {"observe", "wait", "eval_js", "finish"}
+    assert [t["function"]["name"] for t in llm.tools_seen[4]] == ["finish"]
+    assert [t["function"]["name"] for t in llm.tools_seen[5]] == ["finish"]
+    # 死心不改的那次 eval_js 在 harness 层被拒回，没有真的执行
+    rejected = next(m["content"] for m in result.transcript if m.get("tool_call_id") == "c9")
+    assert "收口轮只剩 finish" in rejected
+    step9 = next(s for s in result.steps if s.args.get("expr") == "还在扒")
+    assert "收口轮只剩 finish" in step9.result_preview
+
+
 def test_non_browser_turns_do_not_count_as_stalled(skill):
     """连读十份资料时页面本来就不会变，那不是卡死——只有真碰过浏览器的轮次才计数。"""
     llm = ScriptedLLM(*[reply(call("read_resource", f"c{i}", path="nope")) for i in range(6)],
@@ -431,7 +469,7 @@ def test_compaction_rebuilds_context_at_threshold(skill):
     缓存命中的前提是前缀逐字节相同，每轮回头改写历史会让缓存全程落空。"""
     llm = ScriptedLLM(
         reply(call("read_resource", "c1", path="x")),          # 第 1 轮：报 9999 tokens
-        reply(content="交接：已完成第 1 步，project_id=625226294103158784，下一步点提交"),  # 压缩调用
+        reply(content="交接：已完成第 1 步，project_id=123456789012345678，下一步点提交"),  # 压缩调用
         reply(call("finish", "c2", outcome="done", summary="ok")),
         prompt_tokens=9999,
     )
@@ -443,7 +481,7 @@ def test_compaction_rebuilds_context_at_threshold(skill):
     rebuilt = llm.seen[2]
     assert len(rebuilt) == 3
     assert [m["role"] for m in rebuilt] == ["system", "user", "user"]
-    assert "625226294103158784" in rebuilt[-1]["content"]      # 关键事实被带过来了
+    assert "123456789012345678" in rebuilt[-1]["content"]      # 关键事实被带过来了
     assert "引用编号全部作废" in rebuilt[-1]["content"]           # 明确告诉它 ref 没了
     assert any(s.tool == "compact" for s in result.steps)      # 这件事要在轨迹里看得见
 

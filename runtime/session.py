@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from collections.abc import Callable, Sequence
 from datetime import datetime
@@ -60,6 +61,10 @@ def resume_run_id(previous: str) -> str:
     return f"{previous}+resume{datetime.now():%H%M%S}"
 
 
+def rejudge_run_id(root: str) -> str:
+    return f"{root}+rejudge{datetime.now():%H%M%S}"
+
+
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -86,6 +91,7 @@ class RunSession:
         briefing: Callable[[str], str] | None = None,
         env: str = "",
         memory: AtomMemory | None = None,
+        rejudge_of: tuple[Run, Path] | None = None,   # (原始跑批记录, 原始目录)：仅重判模式
     ):
         self.skill = skill
         self.scenario = scenario
@@ -107,8 +113,14 @@ class RunSession:
         self.asset_writer = AssetWriter(skill, scenario.name)
         self.record = Run(run_id, scenario.name, skill.name, scenario.mode.value,
                           env=env, started_at=_now())
+        # rejudge_of 必须在第一次 _persist 之前落进 record——中途崩掉的记录也要认得出是重判
+        if rejudge_of is not None:
+            self.record.rejudge_of = rejudge_of[0].run_id
         self._persist()
-        self._snapshot_task()
+        if rejudge_of is not None:
+            self._inherit(*rejudge_of)
+        else:
+            self._snapshot_task()
 
         # briefing 只进 runner 的任务说明；裁判那条路（self.prompts.judge）压根不碰它
         self.prompts = TaskPrompts(PromptLibrary(settings.prompts_dir), briefing,
@@ -168,6 +180,43 @@ class RunSession:
             raise FileNotFoundError(f"{previous_run_dir.name} 没有冻结现场，接不上")
         return json.loads(path.read_text(encoding="utf-8"))["messages"]
 
+    # ---- 仅重判 ---------------------------------------------------------------
+    _INHERIT_FILES = (CONTEXT_FILE, STORAGE_STATE_FILE)
+
+    def _inherit(self, src: Run, src_dir: Path) -> None:
+        """把原始跑批的现场复制进重判目录：事实（context.yaml）、登录态（storage_state.json）、
+        任务存档（task/）。原始目录一个字节不动——重判的产物全落在自己的新目录里。
+        判分脚本在 run_dir 下读写 judgment/verdict，在原目录重判必然覆盖原始证据，
+        所以「新目录 + 复制」不是可选的风格问题，是正确性问题。"""
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        for name in self._INHERIT_FILES:
+            src_file = src_dir / name
+            if src_file.exists():
+                shutil.copy2(src_file, self.run_dir / name)
+        task_src = src_dir / TASK_DIR
+        if task_src.is_dir():
+            shutil.copytree(task_src, self.run_dir / TASK_DIR, dirs_exist_ok=True)
+        # 判据永远写当前版本——这正是重判存在的意义：判据改对了，用同一份现场重新取证
+        expect_text = self.scenario.read_or_empty("expect.yaml")
+        if expect_text:
+            (self.run_dir / TASK_DIR).mkdir(parents=True, exist_ok=True)
+            (self.run_dir / TASK_DIR / "expect.yaml").write_text(expect_text, encoding="utf-8")
+        # runner 侧的轨迹和产物继承过来：详情页能看完整执行过程，用量统计也能对上
+        self.record.steps = src.steps
+        self.record.summary = src.summary
+        self.record.notes = src.notes
+        self.record.runner_outcome = src.runner_outcome
+        self.record.mode = src.mode or self.record.mode
+        self.record.playbook_before = src.playbook_before
+        self.record.playbook_after = src.playbook_after
+        self.record.playbook_written = src.playbook_written
+        self._persist()
+
+    def rejudge(self) -> Run:
+        """只重跑裁判：不碰 runner 的现场（积分早扣了），用继承来的登录态和事实重新取证。"""
+        self.emit("phase", "仅重跑裁判：复用原跑批现场，不重跑执行")
+        return self._judge()
+
     # ---- 主 agent -------------------------------------------------------------
     def _guarded(
         self,
@@ -195,7 +244,12 @@ class RunSession:
             with self._browser("runner") as browser:
                 loop.fingerprint = browser.fingerprint   # 原地踏步检测的环境指纹来源
                 if start_url:
-                    browser.navigate(start_url)
+                    # 入口打不开不致命：agent 有 navigate 工具，可以自己重试或换地址——
+                    # 别让 start_url 的异常把整场跑批炸成 error（2026-10-26 生产首跑即挂的教训）
+                    try:
+                        browser.navigate(start_url)
+                    except Exception as e:
+                        print(f"[start_url] {start_url} 打开失败（{type(e).__name__}），交给 agent 自行处理")
                 ctx = ToolContext(browser, self.skill, self.scenario.name,
                                   run_id=self.record.run_id, memory=self.memory,
                                   playbook_step_sink=self.asset_writer.enqueue_playbook_step)
@@ -297,6 +351,23 @@ class RunSession:
 
     def _judge(self) -> Run:
         """独立裁判：全新会话 + 全新对话，但继承被测应用的落盘状态。"""
+        def _criteria_confirmed(facts: dict[str, Any]) -> str | None:
+            """交卷闸：有 blocked 却没对「判据本身是否写错」表态 → 退回一次。
+            2026-10-29 实测：裁判的 note 里明明写出了正确位置（字段在别的页面），
+            却不交 criteria_issues——光写进提示词模型会忘，harness 拦一道才可靠。"""
+            judgment = (facts.get("judgment") or {}) if isinstance(facts, dict) else {}
+            blocked = [str(c.get("fact", ""))[:40]
+                       for st in (judgment.get("steps") or [])
+                       for c in (st.get("check") or []) if c.get("result") == "blocked"]
+            if not blocked or facts.get("criteria_issues"):
+                return None
+            return (f"你有 {len(blocked)} 条 check 记了 blocked，但还没表态『判据本身是否可能写错』。"
+                    "逐条想一下：blocked 的原因是「页面/环境确实如此」，还是「你亲眼在别的页面"
+                    "看到了它要的东西、判据把取证位置写错了」？后者请在 facts 里加 criteria_issues"
+                    "（每条含 check_ref/step/check/current/observed/proposed/problem，observed 必须是"
+                    "你工具调用里真实读到的页面原文，一场最多 2 条）；确认判据无误就不加这个字段，"
+                    "其余内容原样不动，重新调用 finish。")
+
         try:
             task = self.prompts.judge(
                 self.scenario,
@@ -310,7 +381,8 @@ class RunSession:
                              on_llm_call=lambda info: self._on_llm_call(info, judge=True),
                              cancel=self.cancel,
                              compact_at=self.settings.compact_at_tokens,
-                             compact_prompt=self.prompts.compact())
+                             compact_prompt=self.prompts.compact(),
+                             finish_check=_criteria_confirmed)
             with self._browser("judge", storage_state=self.run_dir / STORAGE_STATE_FILE) as browser:
                 loop.fingerprint = browser.fingerprint
                 result = loop.run(ToolContext(browser, self.skill, read_only=True),
@@ -336,6 +408,28 @@ class RunSession:
         self.record.verdict = validator.VERDICT.get(code, f"EXIT{code}")
         self.record.judge_output = output
         self.record.status = validator.STATUS.get(code, RunStatus.ERROR)
+
+        # 裁判质疑判据：严格结论（按原判据算出的 FAIL/BLOCK）先留着，挂成 ASK 等人裁决。
+        # 判据是人的预期，改不改只能人拍板——裁判不能自己改目标自己判。
+        # 裁判交的 step/check 是 1-based（与 check_ref 对齐，2026-10-29 实测），这里统一
+        # 转成 0-based 存档——decide_criteria 落盘时直接用它定位 expect 的行。
+        issues = []
+        for i in (result.facts.get("criteria_issues") or []):
+            if not isinstance(i, dict):
+                continue
+            for k in ("step", "check"):
+                try:
+                    v = int(i.get(k))
+                    if v >= 1:
+                        i[k] = v - 1
+                except (TypeError, ValueError):
+                    pass
+            issues.append(i)
+        if issues and self.record.status is not RunStatus.PASSED:
+            self.record.pending_status = str(self.record.status)
+            self.record.pending_verdict = str(self.record.verdict)
+            self.record.criteria_issues = issues
+            self.record.status, self.record.verdict = RunStatus.NEEDS_INPUT, Verdict.ASK
         return self._finish()
 
     def _unjudged(self, result: LoopResult) -> dict[str, Any]:
@@ -376,7 +470,8 @@ class RunSession:
         if asset_errors:
             warning = "资产沉淀失败（不改变业务结论）：" + "；".join(asset_errors)
             self.record.notes = (self.record.notes + "\n\n" + warning).strip()
-        self.record.playbook_after = count_steps(self.scenario.read_or_empty(PLAYBOOK_FILE))
+        self.record.playbook_after = (self.record.playbook_after if self.record.rejudge_of
+                                      else count_steps(self.scenario.read_or_empty(PLAYBOOK_FILE)))
         if self.frames:
             self.frames.drop(self.record.run_id)   # 跑完清掉实时帧，看板自动切回录屏
         self.record.finished_at = _now()

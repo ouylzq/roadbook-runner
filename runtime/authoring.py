@@ -7,23 +7,26 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from tools import ToolContext
 
 from .config import Settings
-from .domain import Outcome
+from .expect import load_expect, normalize_steps
 from .llm import LLM
-from .loop import AgentLoop
+from .loop import NO_TOOL_CALL_NOTE, AgentLoop
 from .prompts import PromptLibrary, TaskPrompts
 from .session import MAIN_AGENT
 from .skills import Skill
 from .subagents import SubAgentLoader
 from .traces import Step
 
-WRITE_TOOL = "write_scenario_file"
+WRITE_TOOL = "write_scenario_file"   # 生成 agent 用的写场景工具名
 
 
 @dataclass
@@ -33,11 +36,71 @@ class AuthorResult:
     notes: str = ""
     files: list[str] = field(default_factory=list)
     steps: list[dict[str, Any]] = field(default_factory=list)
+    # 成败以磁盘上两份文件的确定性校验为准；agent 调没调 finish 只是内部信号
+    status: str = "ok"                       # ok | partial | failed
+    health: dict[str, bool] = field(default_factory=dict)
+    finished_via_finish: bool = True
+    elapsed_s: float = 0.0
 
     @property
     def scenario(self) -> str | None:
-        return self.files[0].split("/")[0] if self.files else None
+        # 分组场景（team/login）要返回完整相对路径，只取首段会丢掉场景本身
+        return self.files[0].rsplit("/", 1)[0] if self.files else None
 
+
+
+
+def _collect_written(steps: list[Step]) -> list[str]:
+    """只计真正写入成功的场景文件，按首次写入顺序去重。"""
+    out: list[str] = []
+    for step in steps:
+        if step.tool != WRITE_TOOL:
+            continue
+        if not (step.result_preview or "").startswith(("已创建", "已覆盖")):
+            continue
+        full = "/".join(x for x in (str(step.args.get("scenario") or ""),
+                                    str(step.args.get("filename") or "")) if x)
+        if full and full not in out:
+            out.append(full)
+    return out
+
+
+def _status_of(health: dict[str, bool]) -> str:
+    if health.get("intent") and health.get("expect"):
+        return "ok"
+    if not health.get("intent") and not health.get("expect"):
+        return "failed"
+    return "partial"
+
+
+def _check_health(scenarios_dir: Path, scenario: str) -> dict[str, bool]:
+    """以磁盘为准的成功判据：两份文件存在、可解析、不含占位标记。
+
+    这是生成成败的唯一权威判定——agent 调没调 finish 只是内部信号，
+    不该让 PM 看到"吓人的失败"或"安静的假成功"。"""
+    from .domain import Scenario
+    from .intent import load_intent
+
+    sc = Scenario(name=scenario, description="", dir=scenarios_dir / scenario,
+                  has_playbook=False, has_expect=False, start_url=None)
+    health = {"intent": False, "expect": False, "placeholder": False}
+    intent_file = scenarios_dir / scenario / "intent.md"
+    expect_file = scenarios_dir / scenario / "expect.yaml"
+    if intent_file.exists():
+        text = intent_file.read_text(encoding="utf-8", errors="replace")
+        health["placeholder"] = "⏳ 场景生成中" in text
+        try:
+            parsed = load_intent(sc)
+            health["intent"] = bool(parsed.get("conforms") or parsed.get("sections"))
+        except Exception:
+            health["intent"] = False
+    if expect_file.exists():
+        try:
+            parsed = load_expect(sc)
+            health["expect"] = bool(normalize_steps(parsed.get("steps") or []))
+        except Exception:
+            health["expect"] = False
+    return health
 
 class Authoring:
     def __init__(self, settings: Settings):
@@ -48,7 +111,8 @@ class Authoring:
     def author(self, skill: Skill, ask: str, *, scenario: str | None = None,
                url: str | None = None, name: str | None = None,
                project: str | None = None,
-               config_hints: dict[str, str] | None = None) -> AuthorResult:
+               config_hints: dict[str, str] | None = None,
+               on_progress: Callable[[dict], None] | None = None) -> AuthorResult:
         if scenario:
             target = skill.scenario(scenario)
             task = self.prompts.author_edit(target, ask)
@@ -80,13 +144,26 @@ class Authoring:
 
         written: list[str] = []
         steps: list[Step] = []
+        t0 = monotonic()
 
         def on_step(step: Step) -> None:
             steps.append(step)
-            if step.tool == WRITE_TOOL:
-                written.append(f"{step.args.get('scenario')}/{step.args.get('filename')}")
+            for full in _collect_written([step]):
+                if on_progress:
+                    on_progress({"type": "file", "file": full.rsplit("/", 1)[-1], "ok": True})
+            if step.tool == WRITE_TOOL and on_progress:
+                on_progress({"type": "file", "file": "", "ok": False})
+            if step.tool == "read_resource" and on_progress:
+                on_progress({"type": "sample", "file": str(step.args.get("path") or "")})
+            if on_progress and step.tool not in (WRITE_TOOL, "read_resource"):
+                on_progress({"type": "step", "tool": step.tool})
 
-        loop = AgentLoop(self.agents.load(MAIN_AGENT), self.llm, on_step=on_step)
+        def on_llm(info: object) -> None:
+            if on_progress:
+                on_progress({"type": "llm"})
+
+        loop = AgentLoop(self.agents.load(MAIN_AGENT), self.llm, on_step=on_step,
+                         on_llm_call=(lambda info: on_progress({"type": "llm"}) if on_progress else None))
         result = loop.run(ToolContext(browser=None, skill=skill, scenario=write_scope),
                           skill.brief(), task)
         # 兜底搬目录：点了名/项目但模型写错了地方，就搬到点名的位置（目录内无内部引用，安全）
@@ -107,10 +184,20 @@ class Authoring:
                     src.rename(dst)
                     dst_rel = str(dst.relative_to(skill.scenarios_dir))
                     written = [dst_rel + f[len(src_full):] for f in written]
+        finished_via_finish = any(s.tool == "finish" for s in steps)
+        scenario_name = written[0].rsplit("/", 1)[0] if written else (full_name or "")
+        health = _check_health(skill.scenarios_dir, scenario_name) if scenario_name else {
+            "intent": False, "expect": False, "placeholder": False}
+        status = _status_of(health)
+        # 没调 finish 时的内部备注（loop 的 NO_TOOL_CALL_NOTE）不该流到 PM 面板——
+        # 成败已由磁盘校验判定，这句只是过程信号
+        notes = result.notes
+        if NO_TOOL_CALL_NOTE in notes:
+            notes = ""
         return AuthorResult(
-            ok=result.outcome is Outcome.DONE and bool(written),
-            summary=result.summary or "（没有产出）",
-            notes=result.notes,
-            files=written,
+            ok=status == "ok", summary=result.summary or "（没有产出）",
+            notes=notes, files=written,
             steps=[s.to_dict() for s in steps],
+            status=status, health=health, finished_via_finish=finished_via_finish,
+            elapsed_s=monotonic() - t0,
         )

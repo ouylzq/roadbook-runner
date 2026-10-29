@@ -42,10 +42,14 @@ class KnowledgeStore:
             "verdict": str(record.verdict), "status": str(record.status),
             "steps": len(record.steps), "judge_steps": len(record.judge_steps),
         }
+        # 仅重判的记录带标记：趋势里能认出来，多条结论并排时知道哪条是复核
+        if record.rejudge_of:
+            entry["rejudge_of"] = record.rejudge_of
         with (self.directory / "experiences" / f"{stem}.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-        if record.notes and record.status is not RunStatus.PASSED:
+        # 重判的 notes 是从原跑批继承来的 runner 备注，再写一遍就是重复
+        if record.notes and record.status is not RunStatus.PASSED and not record.rejudge_of:
             with (self.directory / "reflections" / f"{stem}.md").open("a", encoding="utf-8") as f:
                 f.write(f"\n## {record.run_id} · {record.verdict or record.status}\n\n{record.notes}\n")
 

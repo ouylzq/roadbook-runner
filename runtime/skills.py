@@ -23,7 +23,9 @@ SKIP_DIRS = frozenset({".git", ".venv", "__pycache__", "runs", "node_modules", "
 READABLE_SUFFIXES = frozenset({".md", ".yaml", ".yml", ".txt", ".json"})
 RESOURCE_MAX_CHARS = 20000
 BRIEF_MAX_RESOURCES = 120
-URL_RE = re.compile(r"https?://[^\s`'\"<>)]+")
+# 只认 ASCII 的 URL 字符集：排除 CJK/全角标点（）「」等——否则「（新建研究流程，…）」
+# 这类中文说明会被整段粘进地址（2026-10-26 实测把 start_url 污染成半句话，导航必挂）。
+URL_RE = re.compile(r"https?://[A-Za-z0-9.-]+(?::\d+)?(?:/[A-Za-z0-9\-._~!$&'()*+,;=:@%]*)?")
 TITLE_RE = re.compile(r"^# (.+?)\s*$", re.M)
 TITLE_PREFIX = re.compile(r"^(场景|Scenario)\s*[:：]\s*")
 CONFIG_FILE = "config/env.json"     # 场景里 `environments.<env>.xxx` 这类引用指的就是它
