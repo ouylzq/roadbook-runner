@@ -2602,7 +2602,7 @@ async function intentDocSaveSection(id, key){
 // 真正能人为决定的是**跑哪个环境**，那个在卡片上的运行按钮里选。
 let CTXVARS = null;
 let SKILLCFG = {};      // 技能的 config/env.json，给下面的 cfgInline 解释引用用
-let SKILL_PROJECTS = [];  // scenarios/ 下的全部分组目录（含空组，如 定量/），新建场景的下拉用它
+let SKILL_PROJECTS = [];  // scenarios/ 下的全部分组目录（含空组，如 team/），新建场景的下拉用它
 async function loadSkillCfg(skill){
   try{ SKILLCFG = await (await fetch(`/api/skills/${encodeURIComponent(skill || 'roadbook')}/config`)).json(); }
   catch(e){ SKILLCFG = {}; }

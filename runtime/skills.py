@@ -130,7 +130,7 @@ class Skill:
         return out
 
     def project_groups(self) -> list[str]:
-        """scenarios/ 下的项目分组目录名——**含还没有场景的空分组**（如 定量/）。
+        """scenarios/ 下的项目分组目录名——**含还没有场景的空分组**（如 team/）。
         自己带 intent.md 的目录是场景不是分组（如 search-first-result/），不算。"""
         if not self.scenarios_dir.is_dir():
             return []

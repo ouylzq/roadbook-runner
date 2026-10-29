@@ -68,7 +68,7 @@ RUN_SKILL_SCRIPT_TOOL = Tool(
         "脚本怎么用、要传什么参数，看技能资源里的说明——不要瞎猜参数。"
     ),
     parameters={
-        "script": {"type": "string", "description": "脚本文件名，如 get_login_code.py"},
+        "script": {"type": "string", "description": "脚本文件名，如 fetch_snapshot.py"},
         "args": {"type": "array", "items": {"type": "string"}, "description": "命令行参数，按顺序给"},
     },
     required=("script",),
