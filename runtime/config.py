@@ -61,6 +61,19 @@ class Settings:
     atom_refutes_demote: int        # 已落盘的条目被几个不同跑批否决就划掉（预留，这版不做）
     atom_pending_ttl_days: int      # 候选多少天没人验证就过期
 
+    # ---- 环境隔离与清理策略（2026-11-10 新增，全部带默认值，不影响既有调用） ----
+    env_profile: str = "test"          # 环境名：test / prod
+    test_env_url: str = ""             # 隔离测试环境入口；空 = 退回 default_target_url
+    isolation_db: str = ""             # 隔离边界：数据库（应指向独立测试库）
+    isolation_email: str = ""          # 隔离边界：邮件出口（sink / stub / live）
+    isolation_storage: str = ""        # 隔离边界：对象存储桶
+    isolation_external_api: str = ""   # 隔离边界：第三方 API（sandbox / stub / live）
+    run_namespace: str = "rb"          # 每个跑批的命名空间前缀，防累积数据跨跑批撞名
+    cleanup_mode: str = "immediate"    # immediate(旧行为) | deferred_gc(隔离+延迟GC)
+    gc_interval_hours: float = 24.0    # deferred_gc 下清理至少延后多久执行
+    gc_retain_days: float = 7.0        # 跑批数据保留天数，GC 只清超过这个天数的
+    gc_max_per_sweep: int = 50         # 单次 GC 扫描最多处理多少条
+
     @property
     def agents_dir(self) -> Path:
         return _env_path("QA_AGENT_AGENTS", self.root / "agents")
@@ -90,6 +103,13 @@ class Settings:
     @property
     def database_path(self) -> Path:
         return self.root / "qa-agent.db"
+
+    @property
+    def isolation_boundary(self) -> dict[str, str]:
+        """被测环境的完整隔离边界。只隔 DB 是虚假安全感——邮件/存储/第三方
+        任一仍是真实出口，副作用就会漏到隔离环境之外。空值表示「未声明」。"""
+        return {"db": self.isolation_db, "email": self.isolation_email,
+                "storage": self.isolation_storage, "external_api": self.isolation_external_api}
 
     @property
     def reports_dir(self) -> Path:
@@ -146,6 +166,17 @@ class Settings:
             # 超过上限不拒绝——排队等空位，跑批发起方不用重试。
             max_concurrent_runs=int(os.getenv("QA_AGENT_MAX_CONCURRENT_RUNS", "10")),
             cleanup_hold_hours=float(os.getenv("QA_AGENT_CLEANUP_HOLD_HOURS", "4")),
+            env_profile=(os.getenv("QA_AGENT_ENV_PROFILE", "test").strip() or "test"),
+            test_env_url=os.getenv("QA_AGENT_TEST_ENV_URL", "").strip(),
+            isolation_db=os.getenv("QA_AGENT_ISOLATION_DB", "").strip(),
+            isolation_email=os.getenv("QA_AGENT_ISOLATION_EMAIL", "").strip(),
+            isolation_storage=os.getenv("QA_AGENT_ISOLATION_STORAGE", "").strip(),
+            isolation_external_api=os.getenv("QA_AGENT_ISOLATION_EXTERNAL_API", "").strip(),
+            run_namespace=(os.getenv("QA_AGENT_RUN_NAMESPACE", "rb").strip() or "rb"),
+            cleanup_mode=(os.getenv("QA_AGENT_CLEANUP_MODE", "immediate").strip().lower() or "immediate"),
+            gc_interval_hours=float(os.getenv("QA_AGENT_GC_INTERVAL_HOURS", "24")),
+            gc_retain_days=float(os.getenv("QA_AGENT_GC_RETAIN_DAYS", "7")),
+            gc_max_per_sweep=int(os.getenv("QA_AGENT_GC_MAX_PER_SWEEP", "50")),
             vercel_bypass_secret=os.getenv("VERCEL_AUTOMATION_BYPASS_SECRET", "").strip(),
             vercel_bypass_hosts=tuple(
                 host.strip().lower()

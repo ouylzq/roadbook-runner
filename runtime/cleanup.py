@@ -51,7 +51,7 @@ def parse_cleanup_block(intent_text: str) -> list[dict[str, Any]]:
         return []
     if not isinstance(data, list):
         return []
-    return [e for e in data if isinstance(e, dict) and e.get("run")]
+    return [e for e in data if isinstance(e, dict) and (e.get("run") or e.get("recipe"))]
 
 
 def resolve_args(arg_refs: list[Any], facts: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -73,22 +73,73 @@ class CleanupManager:
         self.store = store
         self.scripts_dir = settings.skills_dir / "roadbook" / "scripts"
 
+    def load_recipe_catalog(self, recipes_dir: Path | None = None) -> dict[str, dict[str, Any]]:
+        """读 skills/<skill>/recipes/*.yaml 声明的清理配方。维护者写一次、作者按名引用，
+        非技术用户不用碰脚本名与参数键。目录不存在就返回空——不算错。"""
+        base = Path(recipes_dir) if recipes_dir else (self.settings.skills_dir / "roadbook" / "recipes")
+        catalog: dict[str, dict[str, Any]] = {}
+        if not base.is_dir():
+            return catalog
+        for path in sorted(base.glob("*.yaml")):
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (OSError, yaml.YAMLError):
+                continue
+            if isinstance(data, dict) and data.get("run"):
+                data.setdefault("name", path.stem)
+                catalog[str(data["name"])] = data
+        return catalog
+
+    def _facts_with_namespace(self, facts: dict[str, Any]) -> dict[str, Any]:
+        """把跑批命名空间注入事实，配方可用 context.namespace 做前缀清理。"""
+        out = dict(facts or {})
+        out.setdefault("namespace", self.settings.run_namespace)
+        return out
+
+    def _resolve_recipes(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """把 ``- recipe: 名字`` 解析成具体脚本；未知配方标 failed 进残留报告，不静默丢。"""
+        if not any(e.get("recipe") for e in entries):
+            return entries
+        catalog = self.load_recipe_catalog()
+        out: list[dict[str, Any]] = []
+        for e in entries:
+            name = e.get("recipe")
+            if not name or e.get("run"):
+                out.append(e)
+                continue
+            rec = catalog.get(str(name))
+            if rec is None:
+                out.append({**e, "run": "", "_unknown_recipe": str(name)})
+                continue
+            merged = {**rec}
+            merged["args"] = e.get("args", rec.get("args") or [])
+            if "not_before" not in merged and "not_before" in e:
+                merged["not_before"] = e["not_before"]
+            out.append(merged)
+        return out
+
     # ---- 登记（verdict 落地后，由跑批收尾钩子调用） -----------------------------
     def register_from_run(self, run_id: str, scenario_name: str, intent_text: str,
                           facts: dict[str, Any], verdict: str = "") -> list[dict[str, Any]]:
         entries = parse_cleanup_block(intent_text)
         if not entries:
             return []
+        entries = self._resolve_recipes(entries)
         # 结论非 PASS 就进保持窗口：判据写错、裁判卡死都还有「只重跑裁判」的补救机会，
         # 证据先别清。晚几个小时回收的代价远小于重扣一遍 runner 的积分。
+        now = datetime.now()
         hold_until = ""
-        next_base = datetime.now()
         if str(verdict).strip() not in ("", "PASS", "EXPLORED"):
-            hold_until = (next_base + timedelta(hours=self.settings.cleanup_hold_hours)
+            hold_until = (now + timedelta(hours=self.settings.cleanup_hold_hours)
                           ).isoformat(timespec="seconds")
+        # deferred_gc：结论落地后不立即删，先把证据攒到保留期，交给 GC 周期清。
+        # immediate（默认，保持旧行为）：PASS 立即排程。
+        delay = (timedelta(hours=self.settings.gc_interval_hours)
+                 if self.settings.cleanup_mode == "deferred_gc" else timedelta(0))
+        next_base = now + delay
         out = []
         for i, e in enumerate(entries):
-            args, missing = resolve_args(e.get("args") or [], facts)
+            args, missing = resolve_args(e.get("args") or [], self._facts_with_namespace(facts))
             task_id = f"{run_id}#{i}"
             script = str(e.get("run") or "")
             # 深度防御：同一 script+args 只保留一条活着（非 failed）的任务。
@@ -97,14 +148,20 @@ class CleanupManager:
             alive = [t for t in self.store.all_cleanup_tasks(500)
                      if t["script"] == script and t["args_json"] == json.dumps(args, ensure_ascii=False)
                      and t["state"] != "failed"]
-            if alive:
+            if alive and script:
                 out.append({"task_id": alive[0]["id"], "script": script,
                             "state": alive[0]["state"], "missing": [], "dedup": True})
                 continue
             next_at = max(next_base + timedelta(minutes=int(e.get("not_before") or 0)),
                           datetime.fromisoformat(hold_until) if hold_until else next_base
                           ).isoformat(timespec="seconds")
-            state, note = ("pending", "") if not missing else ("failed", f"缺事实键: {'、'.join(missing)}")
+            unknown = e.get("_unknown_recipe")
+            if unknown:
+                state, note = "failed", f"未知清理配方: {unknown}"
+            elif missing:
+                state, note = "failed", f"缺事实键: {'、'.join(missing)}"
+            else:
+                state, note = "pending", ""
             self.store.upsert_cleanup_task(
                 task_id=task_id, run_id=run_id, scenario=scenario_name,
                 script=script, args=args, state=state,
@@ -190,3 +247,17 @@ class CleanupManager:
         task = next((t for t in self.store.all_cleanup_tasks(500) if t["id"] == task_id), None)
         if task:
             self.store.hold_cleanup(task["run_id"], "")   # hold_until 清空（next_at MAX 不早于空串）
+
+    # ---- GC 周期扫描与残留报告（隔离优先模型的主职） --------------------------
+    def gc_sweep(self, limit: int | None = None) -> dict[str, Any]:
+        """一次 GC：把到期的清理任务跑掉，并返回清不掉的残留。
+        与 verdict 解耦——失败不改业务结论，只进残留报告交人处理。"""
+        cap = limit if limit is not None else self.settings.gc_max_per_sweep
+        ran = self.run_due(limit=cap)
+        leftover = self.leftover_report()
+        return {"ran": ran, "leftover": len(leftover), "tasks": leftover}
+
+    def leftover_report(self, limit: int = 200) -> list[dict[str, Any]]:
+        """清不掉的残留（含未知配方、失败脚本）。照 agent-qa quarantine 的思路：
+        进报告、可在看板重试，绝不让它染红 verdict。"""
+        return [t for t in self.store.all_cleanup_tasks(limit) if t["state"] == "failed"]

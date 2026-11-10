@@ -775,7 +775,10 @@ def api_run(rid: str) -> dict[str, Any]:
 @app.get("/api/cleanup")
 def api_cleanup() -> dict[str, Any]:
     """清理任务台账：看板「待清理」队列的数据源。"""
-    return {"tasks": cleanup_manager.all_tasks(100)}
+    return {"tasks": cleanup_manager.all_tasks(100),
+            "leftover": cleanup_manager.leftover_report(),
+            "isolation": core.settings.isolation_boundary,
+            "mode": core.settings.cleanup_mode}
 
 
 @app.post("/api/cleanup/{task_id}/retry")

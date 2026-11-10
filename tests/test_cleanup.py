@@ -5,6 +5,7 @@ hold 窗口是「修判据 → 只重跑裁判」能否落地的前提，锁错�
 """
 from __future__ import annotations
 
+import json
 import textwrap
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -153,3 +154,67 @@ def test_read_facts_tolerates_missing_file(tmp_path: Path):
     assert read_facts(tmp_path / "nope") == {}
     (tmp_path / "context.yaml").write_text("project_id: abc\n", encoding="utf-8")
     assert read_facts(tmp_path) == {"project_id": "abc"}
+
+
+# ---- 2026-11-10 新增：隔离优先 + 延迟 GC 台账 ---------------------------------
+
+@pytest.fixture
+def gc_mgr(monkeypatch, tmp_path: Path) -> CleanupManager:
+    for var in ("QA_AGENT_SKILLS", "ROADBOOK_REPO"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("QA_AGENT_CLEANUP_HOLD_HOURS", "4")
+    monkeypatch.setenv("QA_AGENT_CLEANUP_MODE", "deferred_gc")
+    monkeypatch.setenv("QA_AGENT_GC_INTERVAL_HOURS", "24")
+    settings = Settings.from_env(tmp_path / "qa-gc")
+    return CleanupManager(settings, Store(settings.database_path))
+
+
+def test_deferred_gc_mode_defers_even_pass(gc_mgr: CleanupManager):
+    now = datetime.now()
+    tasks = gc_mgr.register_from_run("r1", "sc", INTENT_WITH_BLOCK,
+                                     {"project_id": "p1"}, verdict="PASS")
+    assert tasks and tasks[0]["state"] == "pending"
+    row = gc_mgr.store.cleanup_tasks_for_run("r1")[0]
+    assert datetime.fromisoformat(row["next_at"]) >= now + timedelta(hours=23.9)
+
+
+def test_gc_sweep_runs_due_tasks(mgr: CleanupManager):
+    mgr.store.upsert_cleanup_task(task_id="t-due", run_id="r1", scenario="sc",
+                                  script="nope.sh", args=[], state="pending", next_at=_now())
+    out = mgr.gc_sweep()
+    assert out["ran"] == 1
+    assert set(out) == {"ran", "leftover", "tasks"}
+
+
+def test_leftover_report_lists_failed_only(mgr: CleanupManager):
+    mgr.store.upsert_cleanup_task(task_id="f1", run_id="r1", scenario="sc", script="x.sh",
+                                  args=[], state="failed", next_at=_now(), last_error="boom")
+    mgr.store.upsert_cleanup_task(task_id="p1", run_id="r2", scenario="sc", script="x.sh",
+                                  args=[], state="pending", next_at=_now())
+    assert [t["id"] for t in mgr.leftover_report()] == ["f1"]
+
+
+def test_recipe_catalog_resolves_by_name(mgr: CleanupManager):
+    recipes = mgr.settings.skills_dir / "roadbook" / "recipes"
+    recipes.mkdir(parents=True, exist_ok=True)
+    (recipes / "cleanup_project.yaml").write_text(
+        "name: cleanup_project\nrun: cleanup_project.sh\nargs: [context.project_id]\n",
+        encoding="utf-8")
+    intent = "## 清理\n```yaml cleanup\n- recipe: cleanup_project\n  args: [context.project_id]\n```\n"
+    tasks = mgr.register_from_run("r1", "sc", intent, {"project_id": "p1"}, verdict="PASS")
+    assert tasks[0]["script"] == "cleanup_project.sh"
+    row = mgr.store.cleanup_tasks_for_run("r1")[0]
+    assert json.loads(row["args_json"]) == ["p1"]
+
+
+def test_unknown_recipe_marked_failed(mgr: CleanupManager):
+    intent = "## 清理\n```yaml cleanup\n- recipe: does_not_exist\n```\n"
+    tasks = mgr.register_from_run("r1", "sc", intent, {}, verdict="PASS")
+    assert tasks and tasks[0]["state"] == "failed"
+
+
+def test_namespace_injected_into_facts(mgr: CleanupManager):
+    intent = "## 清理\n```yaml cleanup\n- run: ns.sh\n  args: [context.namespace]\n```\n"
+    mgr.register_from_run("r1", "sc", intent, {}, verdict="PASS")
+    row = mgr.store.cleanup_tasks_for_run("r1")[0]
+    assert json.loads(row["args_json"]) == ["rb"]
