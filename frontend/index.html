@@ -1381,10 +1381,32 @@ async function cleanupNow(taskId){
 // 这是「看资产」的窗口，不是编辑器：图怎么走由 YAML 决定，这里只渲染 + 校验警告。
 // 反向边（实体→清理动作）是台账真正用的那条语义，所以专门用虚线画出来。
 const GRAPH_KIND = {page:['页面','var(--look)'], action:['动作','var(--act)'], entity:['实体','var(--asset)']};
+let GRAPH_GOAL = '看统计';
 
 async function openGraph(){
   document.querySelector('#graphdlg').showModal();
   await renderGraph();
+}
+
+// 「试一下」：拿一句目标描述打 /api/graph/plan，返回的就是跑批时注入的同一段文本。
+// 没命中就明说没命中——图不瞎猜，这里也不装作有。
+async function graphPlan(){
+  const box = $('#graph-hint');
+  if(!box) return;
+  const input = $('#graph-goal');
+  GRAPH_GOAL = (input ? input.value : GRAPH_GOAL).trim();
+  box.innerHTML = '<span class="hint">算一下…</span>';
+  let d;
+  try{ d = await (await fetch('/api/graph/plan?goal=' + encodeURIComponent(GRAPH_GOAL))).json(); }
+  catch(e){ box.innerHTML = `<span class="hint">请求失败：${esc(String(e))}</span>`; return; }
+  if(!d.hint){
+    box.innerHTML = `<span class="hint">${esc(d.reason || '没命中任何节点')}</span>`;
+    return;
+  }
+  box.innerHTML = `<pre style="white-space:pre-wrap;margin:0;padding:10px 12px;border:1px solid var(--line);
+      border-radius:7px;background:var(--surface-2);font:12px/1.65 var(--mono)">${esc(d.hint)}</pre>
+    <div class="hint" style="margin-top:6px">上面就是跑批时拼进任务说明的原文。只喂给执行 agent 当导航参考，
+      裁判那条路看不到它，判分只凭现场和 expect.yaml。</div>`;
 }
 
 function graphSvg(nodes, edges){
@@ -1501,12 +1523,22 @@ async function renderGraph(){
     return `<tr><td class="mono">${esc(n.id)}</td><td>${esc(kindLabel)}</td>
       <td>${esc(n.title || '')}</td><td>${bits || '<span class="hint">—</span>'}</td></tr>`;
   }).join('');
-  body.innerHTML = head + warn + graphSvg(nodes, edges) + legend +
+  body.innerHTML = head + warn +
+    `<div style="display:flex;gap:8px;align-items:center;margin:0 0 8px">
+      <input id="graph-goal" value="${esc(GRAPH_GOAL)}" onkeydown="if(event.key==='Enter')graphPlan()"
+        placeholder="用一句大白话说这次要验什么，比如「看统计」"
+        style="flex:1;padding:6px 9px;border:1px solid var(--line);border-radius:6px;
+               background:var(--surface);color:var(--ink);font:13px system-ui"/>
+      <button class="ghost" onclick="graphPlan()">看会给什么提示</button>
+    </div>
+    <div id="graph-hint" style="margin-bottom:12px"></div>` +
+    graphSvg(nodes, edges) + legend +
     `<h4 style="margin-top:14px">节点明细</h4>
      <table class="hist-t"><thead><tr><th>id</th><th>类型</th><th>标题</th><th>锚点 / 别名 / 清理</th></tr></thead>
      <tbody>${rows}</tbody></table>
      <div class="hint" style="margin-top:10px">改这张图就是改 <code>&lt;技能根目录&gt;/graph/app.yaml</code>：
        加节点、加边、改锚点都直接落在文件里，刷新这里就能看到校验结果。判分永远不读它。</div>`;
+  graphPlan();
 }
 
 // ---- 结论怎么读：卡片药丸的 title、上手面板共用一份 ----

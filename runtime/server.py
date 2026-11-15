@@ -804,6 +804,25 @@ def api_graph(full: bool = False) -> dict[str, Any]:
     return data
 
 
+@app.get("/api/graph/plan")
+def api_graph_plan(goal: str = "") -> dict[str, Any]:
+    """试一下：这段目标描述会让图谱给 runner 什么导航提示。
+
+    返回的就是跑批时拼进任务说明的**同一段文本**（graph.briefing）——看板只是把它念出来，
+    不参与任何判分。没命中就返回空 hint：宁可整段不出现，也不给一条瞎猜的路。
+    """
+    if not core.settings.graph_enabled:
+        return {"enabled": False, "hint": "",
+                "reason": "图谱已关闭（QA_AGENT_GRAPH_ENABLED=on 才生效）"}
+    try:
+        graph = load_skill_graph(core.skill().root)
+    except (FileNotFoundError, OSError) as e:
+        return {"enabled": True, "hint": "", "reason": f"技能未加载：{e}"}
+    hint = graph.briefing(goal) if (goal.strip() and graph) else ""
+    return {"enabled": True, "hint": hint,
+            "reason": "" if hint else "这段描述没命中图里任何节点——跑批时图谱提示会整段不出现"}
+
+
 @app.post("/api/cleanup/{task_id}/retry")
 def api_cleanup_retry(task_id: str) -> dict[str, Any]:
     cleanup_manager.requeue(task_id)
