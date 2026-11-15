@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -219,6 +220,17 @@ class CleanupManager:
             ran += 1
         return ran
 
+    def _command_for(self, script: Path, args: list[str]) -> list[str]:
+        """按脚本后缀挑解释器。
+
+        `.sh` 走 `bash`（原来的行为，不动）。但 Windows 上裸 `bash` 会解析到 WSL
+        包装器，很多环境会被安全策略拦掉，清理任务就会全进 failed。所以 `.py` 配方
+        显式用当前解释器跑——同一份配方在三个平台都不用改。
+        """
+        if script.suffix.lower() == ".py":
+            return [sys.executable, str(script), *args]
+        return ["bash", str(script), *args]
+
     def _execute(self, task: dict[str, Any]) -> None:
         # scripts_dir 本身就是 <skills>/roadbook/scripts，任务里的 script 是相对它的路径。
         # 2026-10-28 发现的老写法又拼了一次 roadbook/scripts，任何任务真执行都会 127。
@@ -226,7 +238,7 @@ class CleanupManager:
         args = json.loads(task.get("args_json") or "[]")
         attempts = int(task.get("attempts") or 0) + 1
         try:
-            proc = subprocess.run(["bash", str(script), *args], capture_output=True,
+            proc = subprocess.run(self._command_for(script, args), capture_output=True,
                                   text=True, timeout=600, cwd=str(self.scripts_dir.parent))
         except (OSError, subprocess.TimeoutExpired) as e:
             self._bump(task, "failed", attempts, f"{type(e).__name__}: {e}")

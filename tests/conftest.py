@@ -3,10 +3,22 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import dotenv
 import pytest
 
-from runtime.config import PROJECT_ROOT, Settings
-from runtime.skills import Skill, SkillLoader
+
+def _ignore_local_dotenv(*_args: object, **_kwargs: object) -> bool:
+    return False
+
+
+# 单测不读开发者本地 .env。Settings.from_env(PROJECT_ROOT) 会 load_dotenv(root/.env)，
+# 一旦有人为本地调试配了 .env（改模型、开 deferred_gc、关原子记忆…），
+# “默认值”断言就会被本机配置污染——测试该对环境不敏感。
+# 必须赶在 runtime.config 导入前替换：那边是 `from dotenv import load_dotenv`，取的是模块属性。
+dotenv.load_dotenv = _ignore_local_dotenv
+
+from runtime.config import PROJECT_ROOT, Settings  # noqa: E402
+from runtime.skills import Skill, SkillLoader  # noqa: E402
 
 
 @pytest.fixture

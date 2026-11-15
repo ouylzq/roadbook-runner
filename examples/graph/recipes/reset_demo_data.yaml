@@ -1,8 +1,13 @@
 # 清理配方示例。维护者写一次，用例作者在 intent 里只写 recipe 名（或干脆不写，由图谱反查）。
-# run 指向 <技能根目录>/scripts/ 下的确定性脚本（重置隔离测试环境 / 调删除接口），
-# 本示例仓库不含该脚本，用的时候照自己的环境补上；脚本缺失只会让台账记一条 failed，
-# 进 leftover 报告，绝不改变 verdict。
+# run 指向 <技能根目录>/scripts/ 下的确定性脚本（重置隔离测试环境 / 调删除接口）。
+# 配套脚本见 examples/graph/scripts/reset_demo_data.py，拷进 <技能根目录>/scripts/ 即可。
+# 脚本缺失只会让台账记一条 failed、进 leftover 报告，绝不改变 verdict。
+#
+# 为什么示例用 .py 而不是 .sh：Windows 上裸 `bash` 会解析到 WSL 包装器，很多环境会被
+# 安全策略拦掉，清理任务就全进 failed。`.py` 配方用当前解释器跑，三个平台同一份资产。
+# 已经有 .sh 配方的不用改，runner 仍按原样走 bash。
+#
 # 注意别碰生产数据：清理只针对隔离测试环境。
 name: reset_demo_data
-run: reset_demo_data.sh
+run: reset_demo_data.py
 args: []

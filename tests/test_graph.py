@@ -246,7 +246,9 @@ def test_graph_fills_cleanup_when_intent_has_no_block(tmp_path: Path,
     graph = load_skill_graph(skill_with_graph.root)
     tasks = mgr.register_from_run("r1", "demo-app/todo-persistence", INTENT_NO_BLOCK,
                                   {"task_title": "演示任务"}, verdict="PASS", graph=graph)
-    assert len(tasks) == 1 and tasks[0]["script"] == "reset_demo_data.sh"
+    assert len(tasks) == 1
+    # 示例配方用 .py：Windows 上裸 bash 会落到 WSL 包装器，很多环境会被安全策略拦掉。
+    assert tasks[0]["script"] == "reset_demo_data.py"
     row = mgr.store.cleanup_tasks_for_run("r1")[0]
     assert row["state"] == "pending" and row["args_json"] == "[]"
 

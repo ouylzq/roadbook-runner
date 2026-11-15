@@ -150,6 +150,33 @@ def test_execute_uses_the_right_script_path(mgr: CleanupManager):
     assert states["t-boom"] == "failed"                    # 真失败 → 进人工队列
 
 
+def test_execute_uses_current_interpreter_for_python_recipes(mgr: CleanupManager):
+    """.sh 走 bash，但 `.py` 配方必须用当前解释器跑。
+
+    Windows 上裸 `bash` 会落到 WSL 包装器，很多环境直接被安全策略拦掉，
+    清理任务会 100% 进 failed。用 .py 配方就能跨平台用同一份资产。
+    """
+    scripts = mgr.scripts_dir
+    scripts.mkdir(parents=True, exist_ok=True)
+    (scripts / "ok.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+    (scripts / "cool.py").write_text("raise SystemExit(75)\n", encoding="utf-8")
+    (scripts / "boom.py").write_text("raise SystemExit(3)\n", encoding="utf-8")
+    # 参数按位置传进来，配方靠它拿实体 id
+    (scripts / "echo_arg.py").write_text(
+        "import sys\nraise SystemExit(0 if sys.argv[1:] == ['P-8842'] else 9)\n", encoding="utf-8")
+
+    for tid, script, args in (("p-ok", "ok.py", []), ("p-cool", "cool.py", []),
+                              ("p-boom", "boom.py", []), ("p-arg", "echo_arg.py", ["P-8842"])):
+        mgr.store.upsert_cleanup_task(task_id=tid, run_id="r", scenario="sc", script=script,
+                                      args=args, state="pending", next_at=_now())
+    mgr.run_due()
+    states = {t["id"]: t["state"] for t in mgr.store.all_cleanup_tasks()}
+    assert states["p-ok"] == "done"
+    assert states["p-cool"] == "retry"
+    assert states["p-boom"] == "failed"
+    assert states["p-arg"] == "done"          # 参数确实传到了脚本（退出码 9 就会是 failed）
+
+
 def test_read_facts_tolerates_missing_file(tmp_path: Path):
     assert read_facts(tmp_path / "nope") == {}
     (tmp_path / "context.yaml").write_text("project_id: abc\n", encoding="utf-8")
