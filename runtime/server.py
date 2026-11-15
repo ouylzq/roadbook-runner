@@ -783,17 +783,25 @@ def api_cleanup() -> dict[str, Any]:
 
 
 @app.get("/api/graph")
-def api_graph() -> dict[str, Any]:
+def api_graph(full: bool = False) -> dict[str, Any]:
     """图谱只读摘要：调试时看这张图加载成什么样、有没有校验警告。
-    warnings 非空说明 YAML 有待修的地方，但图仍会按能用的部分工作。"""
+    warnings 非空说明 YAML 有待修的地方，但图仍会按能用的部分工作。
+
+    `full=true` 额外吐 detail（节点/边明细），给看板「图谱」面板画图用。
+    默认不带——它一直是调试用的轻量摘要，别因为看板改变了原有响应的形状。
+    """
     try:
         graph = load_skill_graph(core.skill().root)
     except (FileNotFoundError, OSError) as e:
         return {"enabled": core.settings.graph_enabled, "app": "",
                 "nodes": 0, "edges": 0, "warnings": [f"技能未加载：{e}"]}
-    return {"enabled": core.settings.graph_enabled, "app": graph.app,
-            "nodes": len(graph.nodes), "edges": len(graph.edges),
-            "warnings": list(graph.warnings)}
+    data: dict[str, Any] = {"enabled": core.settings.graph_enabled, "app": graph.app,
+                            "nodes": len(graph.nodes), "edges": len(graph.edges),
+                            "warnings": list(graph.warnings)}
+    if full:
+        data["detail"] = {"nodes": [n.to_dict() for n in graph.nodes],
+                          "edges": [e.to_dict() for e in graph.edges]}
+    return data
 
 
 @app.post("/api/cleanup/{task_id}/retry")

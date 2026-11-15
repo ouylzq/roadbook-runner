@@ -66,6 +66,24 @@ class GraphNode:
     cleanup_recipe: str = ""           # recipes/*.yaml 里的配方名（反向边的执行）
     cleanup_args: tuple[str, ...] = () # 形如 ("context.project_id",)
 
+    def to_dict(self) -> dict[str, Any]:
+        """按 YAML 字段名序列化，给看板画图用：人对着 app.yaml 能逐字核上。
+
+        只吐非空字段——空值写出来只会让看板多出一堆没意义的「—」。
+        """
+        data: dict[str, Any] = {"id": self.id, "kind": self.kind}
+        for name in ("title", "arrival", "fact_key", "create_via", "cleanup_via", "cleanup_recipe"):
+            value = getattr(self, name)
+            if value:
+                data[name] = value
+        for name in ("anchors", "aliases", "atoms", "cleanup_args"):
+            value = getattr(self, name)
+            if value:
+                data[name] = list(value)
+        if self.entry:
+            data["entry"] = True
+        return data
+
 
 @dataclass(frozen=True)
 class GraphEdge:
@@ -75,6 +93,17 @@ class GraphEdge:
     anchor: str = ""
     confidence: float = 1.0
     evidence: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"from": self.source, "to": self.target,
+                                "confidence": self.confidence}
+        if self.action:
+            data["action"] = self.action
+        if self.anchor:
+            data["anchor"] = self.anchor
+        if self.evidence:
+            data["evidence"] = self.evidence
+        return data
 
 
 @dataclass(frozen=True)

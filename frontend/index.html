@@ -808,6 +808,7 @@
   <button class="link" id="onboard-btn" onclick="toggleOnboard()">第一次用？</button>
   <button class="ghost" onclick="openHistory()">历史</button>
   <button class="ghost" onclick="openCleanup()">清理</button>
+  <button class="ghost" onclick="openGraph()">图谱</button>
   <button class="ghost" onclick="openGlobalCfg()">环境配置</button>
   <button class="ghost" onclick="openMemory()">记忆<span class="cnt" id="mem-count" hidden></span></button>
   <button class="ghost" onclick="runAll()">全部跑一遍</button>
@@ -860,6 +861,15 @@
     <button class="ghost" onclick="renderCleanup()">刷新</button>
     <button class="ghost" onclick="document.querySelector('#cleandlg').close()">关闭</button>
   </div><div class="dlg-body" id="clean-body" style="min-width:680px">
+    <span class="hint">读取中…</span>
+  </div></dialog>
+
+<dialog id="graphdlg"><div class="dlg-head">
+    <b style="font-size:14px">图谱 · 应用知识图（只读）</b>
+    <span style="margin-left:auto"></span>
+    <button class="ghost" onclick="renderGraph()">刷新</button>
+    <button class="ghost" onclick="document.querySelector('#graphdlg').close()">关闭</button>
+  </div><div class="dlg-body" id="graph-body" style="min-width:820px;max-width:1020px">
     <span class="hint">读取中…</span>
   </div></dialog>
 
@@ -1365,6 +1375,138 @@ async function cleanupNow(taskId){
   const res = await fetch(`/api/cleanup/${encodeURIComponent(taskId)}/retry`, {method:'POST'});
   if(!res.ok){ alert((await res.json()).detail || '触发失败'); return; }
   renderCleanup();
+}
+
+// ---- 图谱 · 只读视图：把技能的 graph/app.yaml 画成三层有向图 ----
+// 这是「看资产」的窗口，不是编辑器：图怎么走由 YAML 决定，这里只渲染 + 校验警告。
+// 反向边（实体→清理动作）是台账真正用的那条语义，所以专门用虚线画出来。
+const GRAPH_KIND = {page:['页面','var(--look)'], action:['动作','var(--act)'], entity:['实体','var(--asset)']};
+
+async function openGraph(){
+  document.querySelector('#graphdlg').showModal();
+  await renderGraph();
+}
+
+function graphSvg(nodes, edges){
+  const NW = 152, NH = 52, ROWH = 138, TOP = 34, PADX = 28;
+  const W = 800;
+  const rows = ['page','action','entity']
+    .map(k => nodes.filter(n => n.kind === k)).filter(r => r.length);
+  const pos = {};
+  rows.forEach((row, ri) => {
+    const step = (W - PADX*2) / row.length;
+    row.forEach((n, i) => {
+      pos[n.id] = {x: PADX + step*(i + 0.5), y: TOP + ri*ROWH, w: NW, h: NH};
+    });
+  });
+  const H = TOP + (rows.length || 1)*ROWH + 10;
+  const arrow = (id, color) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5"
+      markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="${color}"/></marker>`;
+
+  // 同一层：从盒子侧边走一条上凸的弧；跨层：从下边中点走到上边中点。
+  const path = (a, b) => {
+    if(Math.abs(a.y - b.y) < 1){
+      const dir = b.x > a.x ? 1 : -1;
+      const x1 = a.x + dir*a.w/2, x2 = b.x - dir*b.w/2, y = a.y + a.h/2;
+      return `M${x1},${y} Q${(x1+x2)/2},${y-44} ${x2},${y}`;
+    }
+    const down = b.y > a.y;
+    const y1 = down ? a.y + a.h : a.y, y2 = down ? b.y : b.y + b.h;
+    return `M${a.x},${y1} C${a.x},${(y1+y2)/2} ${b.x},${(y1+y2)/2} ${b.x},${y2}`;
+  };
+  const mid = (a, b) => {
+    if(Math.abs(a.y - b.y) < 1) return {x:(a.x+b.x)/2, y:a.y + a.h/2 - 24};
+    return {x:(a.x+b.x)/2, y:(a.y + a.h + b.y)/2};
+  };
+  const label = (p, text, color) => {
+    const short = String(text);
+    return `<text x="${p.x}" y="${p.y}" text-anchor="middle"
+      font-size="10.5" fill="${color}" style="paint-order:stroke;stroke:var(--surface);stroke-width:3.5px"
+      >${esc(short.length > 16 ? short.slice(0,15) + '…' : short)}</text>`;
+  };
+
+  const parts = [];
+  for(const e of edges){
+    const a = pos[e.from], b = pos[e.to];
+    if(!a || !b) continue;
+    const conf = typeof e.confidence === 'number' ? e.confidence : 1;
+    parts.push(`<path d="${path(a,b)}" fill="none" stroke="var(--accent)" stroke-width="1.5"
+      stroke-opacity="${(0.35 + conf*0.6).toFixed(2)}" marker-end="url(#garrow)"/>`);
+    parts.push(label(mid(a,b), `${e.action || '转场'}${conf < 1 ? ' · ' + conf.toFixed(2) : ''}`, 'var(--accent)'));
+  }
+  // 反向边：创建（动作→实体）与清理（实体→动作），虚线，和上面的转场区分开
+  for(const n of nodes){
+    if(n.kind !== 'entity') continue;
+    const ent = pos[n.id];
+    for(const [key, color, text, marker] of [['create_via','var(--pass)','建','garrow-c'], ['cleanup_via','var(--fail)','删','garrow-d']]){
+      const act = pos[n[key]];
+      if(!ent || !act) continue;
+      const a = key === 'create_via' ? act : ent, b = key === 'create_via' ? ent : act;
+      parts.push(`<path d="${path(a,b)}" fill="none" stroke="${color}" stroke-width="1.4"
+        stroke-dasharray="5 4" marker-end="url(#${marker})"/>`);
+      parts.push(label(mid(a,b), text, color));
+    }
+  }
+  const boxes = nodes.filter(n => pos[n.id]).map(n => {
+    const p = pos[n.id], [kindLabel, color] = GRAPH_KIND[n.kind] || ['节点','var(--muted)'];
+    const title = String(n.title || n.id);
+    const sub = kindLabel + (n.entry ? ' · 入口' : '') + (n.cleanup_recipe ? ' · 可清' : '');
+    return `<g><title>${esc(n.id)}</title>
+      <rect x="${p.x-p.w/2}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8"
+        fill="var(--surface)" stroke="${color}" stroke-width="${n.entry ? 2 : 1.2}"/>
+      <text x="${p.x}" y="${p.y+23}" text-anchor="middle" fill="var(--ink)"
+        font-size="12.5" font-weight="600">${esc(title.length > 17 ? title.slice(0,16)+'…' : title)}</text>
+      <text x="${p.x}" y="${p.y+40}" text-anchor="middle" fill="var(--muted)" font-size="10.5">${esc(sub)}</text>
+    </g>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:${H}px;display:block">
+    <defs>${arrow('garrow','var(--accent)')}${arrow('garrow-c','var(--pass)')}${arrow('garrow-d','var(--fail)')}</defs>
+    ${parts.join('')}${boxes.join('')}
+  </svg>`;
+}
+
+async function renderGraph(){
+  const body = $('#graph-body');
+  body.innerHTML = '<div class="empty">读取中…</div>';
+  let d;
+  try{ d = await (await fetch('/api/graph?full=true')).json(); }
+  catch(e){ body.innerHTML = `<div class="empty">读不到图谱：${esc(String(e))}</div>`; return; }
+  const detail = d.detail || {}, nodes = detail.nodes || [], edges = detail.edges || [];
+  const warns = d.warnings || [];
+  const head = `<div class="hint" style="margin-bottom:8px">
+      应用 <code>${esc(d.app || '（YAML 里没写 app）')}</code> · ${nodes.length} 个节点 / ${edges.length} 条边 ·
+      文件 <code>graph/app.yaml</code>${d.enabled ? '' : ' · <b>图谱已关闭</b>：只是把文件画出来，跑批不会用它'}</div>`;
+  const warn = warns.length
+    ? `<div class="stale" style="margin-bottom:10px">${warns.map(w => '⚠ ' + esc(w)).join('<br>')}</div>` : '';
+  if(!nodes.length){
+    body.innerHTML = head + warn + `<div class="empty">这个技能目录里没有 graph/app.yaml——
+      图是可读资产，没有它跑批照样能跑，只是少了「省探索」和「自动反查清理」两件事。</div>`;
+    return;
+  }
+  const legend = `<div class="hint" style="margin:6px 0 12px">
+      <span style="color:var(--accent)">→ 实线</span> 转场（能点过去，数字是置信度）　
+      <span style="color:var(--pass)">⇢ 建</span> 实体由哪个动作创建　
+      <span style="color:var(--fail)">⇢ 删</span> 实体由哪个动作清理（登记台账时反查的就是这条）</div>`;
+  const rows = nodes.map(n => {
+    const [kindLabel] = GRAPH_KIND[n.kind] || ['节点'];
+    const bits = [
+      n.anchors && `<div><span class="hint">锚点</span> ${esc(n.anchors.join(' / '))}</div>`,
+      n.aliases && `<div><span class="hint">别名</span> ${esc(n.aliases.join(' / '))}</div>`,
+      n.fact_key && `<div><span class="hint">事实键</span> <code>${esc(n.fact_key)}</code></div>`,
+      n.cleanup_recipe && `<div><span class="hint">清理配方</span> <code>${esc(n.cleanup_recipe)}</code>
+        ${(n.cleanup_args||[]).length ? `<span class="hint">${esc(n.cleanup_args.join(', '))}</span>` : ''}</div>`,
+    ].filter(Boolean).join('');
+    return `<tr><td class="mono">${esc(n.id)}</td><td>${esc(kindLabel)}</td>
+      <td>${esc(n.title || '')}</td><td>${bits || '<span class="hint">—</span>'}</td></tr>`;
+  }).join('');
+  body.innerHTML = head + warn + graphSvg(nodes, edges) + legend +
+    `<h4 style="margin-top:14px">节点明细</h4>
+     <table class="hist-t"><thead><tr><th>id</th><th>类型</th><th>标题</th><th>锚点 / 别名 / 清理</th></tr></thead>
+     <tbody>${rows}</tbody></table>
+     <div class="hint" style="margin-top:10px">改这张图就是改 <code>&lt;技能根目录&gt;/graph/app.yaml</code>：
+       加节点、加边、改锚点都直接落在文件里，刷新这里就能看到校验结果。判分永远不读它。</div>`;
 }
 
 // ---- 结论怎么读：卡片药丸的 title、上手面板共用一份 ----
