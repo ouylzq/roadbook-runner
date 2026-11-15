@@ -1,0 +1,74 @@
+# 应用知识图谱示例 —— 对应 D:\roadbook 的 demo-app / todo-* 场景。
+#
+# 用法：把本文件拷到 <技能根目录>/graph/app.yaml，recipes/ 拷到 <技能根目录>/recipes/。
+# 图谱是可读资产，不是判据：独立复核方永远看不到它，判分只凭真实现场与 expect.yaml。
+#
+# 字段速记：
+#   page   一个语义化页面；entry: true 是 plan 的默认起点；anchors 是页面上认得到的文字
+#   entity 被测应用里被创建出来的东西；fact_key 对应 context.yaml 的键
+#          cleanup_via 是反向边的语义（哪个动作删它），cleanup_recipe 是台账真正用的配方名
+#   action 一个可复用动作节点，供 create_via / cleanup_via 指向
+#   edges  from --action/anchor--> to；confidence 由跑批证据慢慢调，不上来就写满
+
+app: demo-app
+
+nodes:
+  - id: page.list
+    kind: page
+    title: 任务列表
+    entry: true
+    anchors: ["需要做什么？", "添加任务", "重置演示数据", "未完成"]
+    aliases: ["任务列表", "加一条任务", "首页"]
+    arrival: "header 的计数器出现「未完成 N」"
+    atoms: [add-task, reset-demo-data]
+
+  - id: page.stats
+    kind: page
+    title: 统计视图
+    anchors: ["总任务数", "未完成"]
+    aliases: ["统计", "看统计"]
+    arrival: "统计卡显示总任务数"
+
+  - id: entity.task
+    kind: entity
+    title: 任务
+    fact_key: task_title
+    create_via: action.add-task
+    cleanup_via: action.reset-demo-data
+    cleanup_recipe: reset_demo_data
+    cleanup_args: []            # demo-app 是 localStorage，重置是全量的，不需要按 id 删
+    aliases: ["新建任务", "添加任务"]
+
+  - id: action.add-task
+    kind: action
+    title: 添加任务
+    anchors: ["添加任务"]
+    atoms: [add-task]
+
+  - id: action.reset-demo-data
+    kind: action
+    title: 重置演示数据
+    anchors: ["重置演示数据"]
+    atoms: [reset-demo-data]
+
+edges:
+  - from: page.list
+    to: page.stats
+    action: 点顶部导航「统计」
+    anchor: "统计"
+    confidence: 0.90
+    evidence: scenarios/demo-app/todo-persistence/expect.yaml
+
+  - from: page.list
+    to: entity.task
+    action: 在输入框填标题并点「添加任务」
+    anchor: "添加任务"
+    confidence: 0.95
+    evidence: scenarios/demo-app/todo-persistence/playbook.md
+
+  - from: action.reset-demo-data
+    to: page.list
+    action: 点「重置演示数据」，列表回到「还没有任务。」
+    anchor: "重置演示数据"
+    confidence: 0.90
+    evidence: scenarios/demo-app/todo-reset/playbook.md

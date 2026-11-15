@@ -22,6 +22,7 @@ from .config import Settings, get_settings
 from .domain import RunStatus, Scenario
 from .events import FrameStore
 from .expect import load_expect, required_context_keys, save_expect
+from .graph import load_skill_graph
 from .intent import parse_intent
 from .knowledge import KnowledgeStore
 from .notify import notify_finished
@@ -83,6 +84,9 @@ class QaAgent:
         return skill.scenario(scenario_name).read_or_empty("intent.md")
 
     def _hooks(self, skill: Skill) -> Sequence[FinishedHook]:
+        # 图谱按技能加载一次，闭包带进清理登记（重判的 _rejudge_hooks 刻意不加载：
+        # 重判不产生新实体，也不该重复登记清理任务）。
+        graph = load_skill_graph(skill.root) if self.settings.graph_enabled else None
         # 收尾四件事：记事实/流水、写报告、给原子候选数票、推飞书。数票要知道写到哪个
         # 技能的 atoms/，所以 hook 按技能现做一个；飞书通知与技能无关，全局一份。
         return (self.knowledge.absorb, self.reports.write,
@@ -91,7 +95,7 @@ class QaAgent:
                 lambda record, run_dir: self.cleanup.register_from_run(
                     record.run_id, record.scenario,
                     self._archived_intent(run_dir, skill, record.scenario),
-                    read_facts(run_dir), verdict=str(record.verdict)))
+                    read_facts(run_dir), verdict=str(record.verdict), graph=graph))
 
     def run(self, skill: Skill, scenario_name: str, *, run_id: str | None = None,
             headless: bool = True, emit: EventListener | None = None,
@@ -100,7 +104,7 @@ class QaAgent:
         session = RunSession(skill, scenario, run_id or new_run_id(scenario.name), self.settings,
                              headless=headless, emit=emit, frames=self.frames, store=self.store,
                              on_finished=self._hooks(skill), cancel=cancel,
-                             briefing=self.knowledge.briefing,
+                             briefing=self._briefing_for(skill, scenario),
                              env=self.pick_env(scenario, env), memory=self.atoms)
         return session.execute()
 
@@ -126,10 +130,34 @@ class QaAgent:
         session = RunSession(skill, scenario, run_id or resume_run_id(previous_run_id), self.settings,
                              headless=headless, emit=emit, frames=self.frames, store=self.store,
                              on_finished=self._hooks(skill), cancel=cancel,
-                             briefing=self.knowledge.briefing,
+                             briefing=self._briefing_for(skill, scenario),
                              # 接着跑要留在原来那个环境，别掉回默认
                              env=self.pick_env(scenario, previous.env), memory=self.atoms)
         return session.resume(transcript, answers)
+
+    # ---- 图谱导航提示（只进 runner 的任务说明） --------------------------------
+    @staticmethod
+    def merge_briefing(base: Callable[[str], str], hint: str) -> Callable[[str], str]:
+        """把图谱提示拼进 briefing。hint 为空就直接返回原回调，一个字节都不多。"""
+        if not hint:
+            return base
+
+        def brief(scenario: str) -> str:
+            return "\n\n".join(part for part in (base(scenario), hint) if part)
+
+        return brief
+
+    def _briefing_for(self, skill: Skill, scenario: Scenario) -> Callable[[str], str]:
+        """开关关掉 / 图为空 / 目标没命中，都原样返回 knowledge.briefing。
+        裁判那条路走 self.prompts.judge，压根不接 briefing，图谱提示进不了判分。"""
+        base = self.knowledge.briefing
+        if not self.settings.graph_enabled:
+            return base
+        graph = load_skill_graph(skill.root)
+        if not graph:
+            return base
+        goal = f"{scenario.title} {scenario.description}".strip()
+        return self.merge_briefing(base, graph.briefing(goal))
 
     # ---- 仅重判 ---------------------------------------------------------------
     def rejudge_preflight(self, rid: str) -> tuple[Run, Path, Skill, Scenario, list[str]]:

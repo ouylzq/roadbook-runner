@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 
 from .config import Settings
+from .graph import AppGraph
 from .store import Store
 
 COOLDOWN_EXIT = 75      # 清理脚本约定：暂时清不了（冷却期/资源忙），稍后重试
@@ -120,8 +121,14 @@ class CleanupManager:
 
     # ---- 登记（verdict 落地后，由跑批收尾钩子调用） -----------------------------
     def register_from_run(self, run_id: str, scenario_name: str, intent_text: str,
-                          facts: dict[str, Any], verdict: str = "") -> list[dict[str, Any]]:
+                          facts: dict[str, Any], verdict: str = "",
+                          graph: AppGraph | None = None) -> list[dict[str, Any]]:
         entries = parse_cleanup_block(intent_text)
+        if not entries and graph:
+            # 图谱反向边：intent 没写清理块时，按本次 facts 里真实创建过的实体反查配方。
+            # 非技术作者连配方名都不用知道——图里 entity.cleanup_via → cleanup_recipe 挂着。
+            # 只认非空实值，凭空编一条清理任务是更危险的事。
+            entries = graph.cleanup_entries_for_facts(facts)
         if not entries:
             return []
         entries = self._resolve_recipes(entries)

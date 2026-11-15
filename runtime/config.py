@@ -73,6 +73,9 @@ class Settings:
     gc_interval_hours: float = 24.0    # deferred_gc 下清理至少延后多久执行
     gc_retain_days: float = 7.0        # 跑批数据保留天数，GC 只清超过这个天数的
     gc_max_per_sweep: int = 50         # 单次 GC 扫描最多处理多少条
+    # 应用知识图谱（runtime/graph.py）。默认关：没有图是正常状态，先跑核心流程再补图。
+    # 开了之后图谱只做导航提示 + 清理反向边，裁判永远看不到它。
+    graph_enabled: bool = False
 
     @property
     def agents_dir(self) -> Path:
@@ -177,6 +180,7 @@ class Settings:
             gc_interval_hours=float(os.getenv("QA_AGENT_GC_INTERVAL_HOURS", "24")),
             gc_retain_days=float(os.getenv("QA_AGENT_GC_RETAIN_DAYS", "7")),
             gc_max_per_sweep=int(os.getenv("QA_AGENT_GC_MAX_PER_SWEEP", "50")),
+            graph_enabled=_env_flag("QA_AGENT_GRAPH_ENABLED", False),
             vercel_bypass_secret=os.getenv("VERCEL_AUTOMATION_BYPASS_SECRET", "").strip(),
             vercel_bypass_hosts=tuple(
                 host.strip().lower()

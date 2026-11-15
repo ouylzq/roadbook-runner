@@ -29,6 +29,7 @@ from .context_vars import describe as describe_context
 from .doctor import Doctor
 from .events import EventStream, FrameStore
 from .expect import EmptyRouteError, load_expect, save_expect
+from .graph import load_skill_graph
 from .intent import IntentError, load_intent, save_intent
 from .intent import spec as intent_spec
 from .playbook import PLAYBOOK_FILE, PlaybookError, load_playbook, save_playbook
@@ -779,6 +780,20 @@ def api_cleanup() -> dict[str, Any]:
             "leftover": cleanup_manager.leftover_report(),
             "isolation": core.settings.isolation_boundary,
             "mode": core.settings.cleanup_mode}
+
+
+@app.get("/api/graph")
+def api_graph() -> dict[str, Any]:
+    """图谱只读摘要：调试时看这张图加载成什么样、有没有校验警告。
+    warnings 非空说明 YAML 有待修的地方，但图仍会按能用的部分工作。"""
+    try:
+        graph = load_skill_graph(core.skill().root)
+    except (FileNotFoundError, OSError) as e:
+        return {"enabled": core.settings.graph_enabled, "app": "",
+                "nodes": 0, "edges": 0, "warnings": [f"技能未加载：{e}"]}
+    return {"enabled": core.settings.graph_enabled, "app": graph.app,
+            "nodes": len(graph.nodes), "edges": len(graph.edges),
+            "warnings": list(graph.warnings)}
 
 
 @app.post("/api/cleanup/{task_id}/retry")
