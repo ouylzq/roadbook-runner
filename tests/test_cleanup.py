@@ -97,6 +97,21 @@ def test_same_script_and_args_dedup(mgr: CleanupManager):
     assert len(mgr.store.all_cleanup_tasks()) == 1
 
 
+def test_done_task_does_not_block_a_later_registration(mgr: CleanupManager):
+    """清完一次不该把后面的清理堵死。
+
+    2026-11-15 实测踩到：去重只排 failed，导致 done 的任务把后续同对象的清理
+    全吞掉——第二次跑批建出来的同名实体永远排不上队。终态必须放行。
+    """
+    mgr.register_from_run("r1", "sc", INTENT_WITH_BLOCK, {"project_id": "same"}, verdict="PASS")
+    mgr.store.set_cleanup_state("r1#0", "done", 1, "", "")
+
+    again = mgr.register_from_run("r2", "sc", INTENT_WITH_BLOCK, {"project_id": "same"}, verdict="PASS")
+    assert not again[0].get("dedup")
+    assert again[0]["task_id"] == "r2#0" and again[0]["state"] == "pending"
+    assert len(mgr.store.all_cleanup_tasks()) == 2
+
+
 def test_after_rejudge_releases_on_pass_holds_otherwise(mgr: CleanupManager):
     mgr.register_from_run("root", "sc", INTENT_WITH_BLOCK, {"project_id": "p1"}, verdict="BLOCK")
     mgr.after_rejudge("root", "PASS", scenario="sc",

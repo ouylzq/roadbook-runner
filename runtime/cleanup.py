@@ -150,12 +150,12 @@ class CleanupManager:
             args, missing = resolve_args(e.get("args") or [], self._facts_with_namespace(facts))
             task_id = f"{run_id}#{i}"
             script = str(e.get("run") or "")
-            # 深度防御：同一 script+args 只保留一条活着（非 failed）的任务。
-            # 正常情况下重判钩子只调整 root 名下的任务、不会走到这里，但两个 run
-            # 产出同一个 project_id 时能避免把不幂等的清理脚本跑两遍。
+            # 深度防御：同一 script+args 只保留一条「还活着」的任务，避免把不幂等的
+            # 清理脚本排两遍。done/failed 是终态，不该拦住后续跑批对同一对象的清理——
+            # 否则第二次跑批建出来的同名实体永远排不上队（2026-11-15 实测踩到）。
             alive = [t for t in self.store.all_cleanup_tasks(500)
                      if t["script"] == script and t["args_json"] == json.dumps(args, ensure_ascii=False)
-                     and t["state"] != "failed"]
+                     and t["state"] in ("pending", "retry", "running")]
             if alive and script:
                 out.append({"task_id": alive[0]["id"], "script": script,
                             "state": alive[0]["state"], "missing": [], "dedup": True})
