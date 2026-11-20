@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadbook Demo · 任务保存</title>
+<link rel="stylesheet" href="/demo.css">
+<main>
+  <p class="brand">Roadbook Demo</p>
+  <h1>用一份路书验证任务保存</h1>
+  <p class="intro">先按 Markdown 路书新增一条任务，再刷新页面，看看任务是否真的保存。可以在下面三个入口体验同一条业务流程。</p>
+
+  <section class="assets" aria-label="场景文件">
+    <a href="/files/intent.md">intent.md <span>要做什么</span></a>
+    <a href="/files/playbook.md">playbook.md <span>按什么步骤做</span></a>
+    <a href="/files/expect.yaml">expect.yaml <span>看到什么才算通过</span></a>
+  </section>
+
+  <ol class="experiments">
+    <li>
+      <h2>正常保存</h2>
+      <p>按路书输入「核对发布清单」，点「添加任务」。刷新后，核对任务标题和已保存数量。</p>
+      <a class="action" href="/tasks?variant=normal">打开任务列表</a>
+    </li>
+    <li>
+      <h2>按钮改名</h2>
+      <p>原来的「添加任务」改成了「保存任务」。对照路书的目标和到位标志，找到完成同一动作的新入口。</p>
+      <a class="action" href="/tasks?variant=renamed">打开改版页面</a>
+    </li>
+    <li>
+      <h2>页面显示成功，数据没有保存</h2>
+      <p>仍会显示「已添加任务」。按验收条件刷新，再看标题和数量。真实 Runner 会让独立裁判重新打开页面取证。</p>
+      <a class="action" href="/tasks?variant=lost-write">打开故障页面</a>
+    </li>
+  </ol>
+</main>
+</html>

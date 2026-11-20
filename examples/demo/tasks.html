@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任务列表</title>
+<link rel="stylesheet" href="/demo.css">
+<script src="/tasks.js" defer></script>
+<main class="task-app">
+  <p class="brand">Roadbook Demo</p>
+  <h1>任务列表</h1>
+  <form id="add-task" class="task-form">
+    <label for="task-title">任务标题</label>
+    <div class="form-row">
+      <input id="task-title" name="title" required maxlength="80" placeholder="输入任务标题" disabled>
+      <button type="submit" disabled>添加任务</button>
+    </div>
+  </form>
+  <p id="feedback" role="status"></p>
+  <section class="task-panel" aria-label="已保存的任务">
+    <h2 id="saved-count">正在读取任务…</h2>
+    <p id="empty" hidden></p>
+    <ul id="task-list" hidden></ul>
+  </section>
+</main>
+</html>

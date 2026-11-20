@@ -1,0 +1,54 @@
+:root {
+  font: 16px/1.65 system-ui, sans-serif;
+  color: #1f2822;
+  background: #f3f3ed;
+  --border: #d6dad0;
+  --green: #214c3a;
+}
+
+body { margin: 0; }
+main { max-width: 56rem; margin: 0 auto; padding: 3rem clamp(1.25rem, 5vw, 3rem); }
+.brand {
+  margin: 0 0 .75rem;
+  color: var(--green);
+  font: 700 .9rem ui-monospace, monospace;
+  letter-spacing: .08em;
+}
+h1 { margin: 0 0 1rem; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.2; }
+h2 { margin: 0; font-size: 1.15rem; }
+p { margin: .6rem 0 1rem; }
+.intro { max-width: 38rem; }
+.assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.25rem;
+  padding: 1rem 0;
+  border-block: 1px solid var(--border);
+}
+.assets a { color: var(--green); font: 700 .9rem ui-monospace, monospace; }
+.assets span { font: 400 .85rem system-ui, sans-serif; }
+.experiments { margin: 1.5rem 0; padding-left: 1.65rem; }
+.experiments li { padding: .9rem .2rem 1.15rem; border-bottom: 1px solid var(--border); }
+.experiments li::marker { color: var(--green); font-weight: 700; }
+.action, button {
+  display: inline-block;
+  border: 1px solid var(--green);
+  border-radius: .4rem;
+  padding: .5rem .9rem;
+  background: var(--green);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.action:hover, button:hover { background: #173b2c; }
+.task-app { max-width: 42rem; }
+.task-form label { display: block; margin: 1.6rem 0 .3rem; font-weight: 650; }
+.form-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+input { flex: 1 1 10rem; border: 1px solid #929b90; border-radius: .4rem; padding: .55rem; font: inherit; }
+button:disabled { opacity: .65; cursor: wait; }
+:focus-visible { outline: 3px solid #98600b; outline-offset: 3px; }
+#feedback { min-height: 1.65em; color: var(--green); }
+.task-panel { background: white; border: 1px solid var(--border); border-radius: .5rem; padding: 1.25rem; }
+.task-panel p, .task-panel ul { margin-bottom: 0; }
